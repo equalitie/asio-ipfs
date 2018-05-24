@@ -11,7 +11,6 @@ project(asio-ipfs)
 find_package(Threads)
 find_package(Boost ${BOOST_VERSION} REQUIRED COMPONENTS
     program_options
-    date_time
     coroutine
     context
     thread
