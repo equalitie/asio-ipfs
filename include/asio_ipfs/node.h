@@ -46,8 +46,8 @@ public:
     typename Result<Token, std::unique_ptr<node>>::type
     build(boost::asio::io_service&, const std::string& repo_path, Token&&);
 
-    // Returns the IPNS CID of the database.
-    std::string ipns_id() const;
+    // Returns this node's IPFS ID
+    std::string id() const;
 
     template<class Token>
     typename Result<Token, std::string>::type
@@ -63,11 +63,11 @@ public:
 
     template<class Token>
     void
-    publish( const std::string& cid, Timer::duration, Token&&);
+    publish(const std::string& cid, Timer::duration, Token&&);
 
     template<class Token>
     typename Result<Token, std::string>::type
-    resolve(const std::string& ipns_id, Token&&);
+    resolve(const std::string& id, Token&&);
 
     template<class Token>
     void

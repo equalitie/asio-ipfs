@@ -10,8 +10,8 @@
 
 using namespace asio_ipfs;
 using namespace std;
-namespace asio  = boost::asio;
-namespace sys   = boost::system;
+namespace asio = boost::asio;
+namespace sys  = boost::system;
 namespace intr = boost::intrusive;
 
 static const uint64_t INVALID_IPFS_HANDLE = uint64_t(-1);
@@ -142,8 +142,8 @@ node::node(asio::io_service& ios, const string& repo_path)
     }
 }
 
-string node::ipns_id() const {
-    char* cid = go_asio_ipfs_ipns_id(_impl->ipfs_handle);
+string node::id() const {
+    char* cid = go_asio_ipfs_node_id(_impl->ipfs_handle);
     string ret(cid);
     free(cid);
     return ret;
@@ -163,12 +163,12 @@ void node::publish_(const string& cid, Timer::duration d, std::function<void(sys
                         , (void*) new Handle<>{_impl, move(cb)});
 }
 
-void node::resolve_(const string& ipns_id, function<void(sys::error_code, string)> cb)
+void node::resolve_(const string& node_id, function<void(sys::error_code, string)> cb)
 {
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
     go_asio_ipfs_resolve( _impl->ipfs_handle
-                        , (char*) ipns_id.data()
+                        , (char*) node_id.data()
                         , (void*) Handle<string>::call_data
                         , (void*) new Handle<string>{_impl, move(cb)} );
 }
@@ -183,13 +183,13 @@ void node::add_(const uint8_t* data, size_t size, function<void(sys::error_code,
                     , (void*) new Handle<string>{_impl, move(cb)} );
 }
 
-void node::cat_(const string& ipfs_id, function<void(sys::error_code, string)> cb)
+void node::cat_(const string& cid, function<void(sys::error_code, string)> cb)
 {
-    assert(ipfs_id.size() == CID_SIZE);
+    assert(cid.size() == CID_SIZE);
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
     go_asio_ipfs_cat( _impl->ipfs_handle
-                    , (char*) ipfs_id.data()
+                    , (char*) cid.data()
                     , (void*) Handle<string>::call_data
                     , (void*) new Handle<string>{_impl, move(cb)} );
 }

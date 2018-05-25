@@ -244,8 +244,8 @@ func go_asio_ipfs_resolve(handle uint64, c_ipns_id *C.char, fn unsafe.Pointer, f
 }
 
 // IMPORTANT: The returned value needs to be explicitly `free`d.
-//export go_asio_ipfs_ipns_id
-func go_asio_ipfs_ipns_id(handle uint64) *C.char {
+//export go_asio_ipfs_node_id
+func go_asio_ipfs_node_id(handle uint64) *C.char {
 	var n = g_nodes[handle]
 
 	pid, err := peer.IDFromPrivateKey(n.node.PrivateKey)
