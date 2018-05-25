@@ -3,6 +3,7 @@
 #include <boost/program_options.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <boost/asio/spawn.hpp>
 
 namespace asio = boost::asio;
 
