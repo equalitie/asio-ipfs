@@ -9,6 +9,7 @@ A C++ Boost.Asio wrapper library over go-ipfs.
 * Boost.Asio based event loop
 * Supports callbacks, futures and coroutines
 * Cmake automatically downloads `golang` and `go-ipfs` + its dependencies
+* Self contained: no need to run a separate ipfs daemon
 
 ## Caveats/TODOs
 
