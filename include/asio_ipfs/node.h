@@ -67,7 +67,7 @@ public:
 
     template<class Token>
     typename Result<Token, std::string>::type
-    resolve(const std::string& id, Token&&);
+    resolve(const std::string& node_id, Token&&);
 
     template<class Token>
     void
@@ -114,6 +114,7 @@ private:
 };
 
 template<class Token>
+inline
 typename node::Result<Token, std::unique_ptr<node>>::type
 node::build( boost::asio::io_service& ios
            , const std::string& repo_path
@@ -127,6 +128,7 @@ node::build( boost::asio::io_service& ios
 }
 
 template<class Token>
+inline
 typename node::Result<Token, std::string>::type
 node::add(const uint8_t* data, size_t size, Token&& token)
 {
@@ -137,6 +139,7 @@ node::add(const uint8_t* data, size_t size, Token&& token)
 }
 
 template<class Token>
+inline
 typename node::Result<Token, std::string>::type
 node::add(const std::string& data, Token&& token)
 {
@@ -149,6 +152,7 @@ node::add(const std::string& data, Token&& token)
 }
 
 template<class Token>
+inline
 typename node::Result<Token, std::string>::type
 node::cat(const std::string& cid, Token&& token)
 {
@@ -159,6 +163,7 @@ node::cat(const std::string& cid, Token&& token)
 }
 
 template<class Token>
+inline
 void
 node::publish(const std::string& cid, Timer::duration d, Token&& token)
 {
@@ -169,6 +174,7 @@ node::publish(const std::string& cid, Timer::duration d, Token&& token)
 }
 
 template<class Token>
+inline
 typename node::Result<Token, std::string>::type
 node::resolve(const std::string& ipns_id, Token&& token)
 {
@@ -179,6 +185,7 @@ node::resolve(const std::string& ipns_id, Token&& token)
 }
 
 template<class Token>
+inline
 void
 node::pin(const std::string& cid, Token&& token)
 {
@@ -189,6 +196,7 @@ node::pin(const std::string& cid, Token&& token)
 }
 
 template<class Token>
+inline
 void
 node::unpin(const std::string& cid, Token&& token)
 {
