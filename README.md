@@ -6,19 +6,18 @@ A C++ Boost.Asio wrapper library over go-ipfs.
 
 ## Features
 
-* Semi-standard event loop
+* Boost.Asio based event loop
 * Supports callbacks, futures and coroutines
 * Cmake automatically downloads `golang` and `go-ipfs` + its dependencies
 
 ## Caveats/TODOs
 
-* There can currently be only one instance of `asio_ipfs::node`.
 * Destroying `asio_ipfs::node` will cancel all peding IPFS async operations,
-  but they currently can't be cancelled individually.
+  but at the moment they can't be cancelled individually.
 * The `asio::io_service` can run in only one thread.
-* Only a subset of IPFS operations are currently supported, have a look at
-  `asio_ipfs/node.h` for details.
-* The `node::cat` opration currently returns the content as a whole (this
+* Only a basic subset of IPFS operations are currently supported, have a look
+  at `asio_ipfs/node.h` for details.
+* The `node::cat` operation returns the content as a whole (this
   is OK for small contents, but some kind of stream would be preferred
   for big ones)
 

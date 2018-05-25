@@ -147,9 +147,12 @@ type Cache struct {
 	cancel context.CancelFunc
 }
 
-var g Cache
+var g_next_cache_id uint64 = 0
+var gs = make(map[uint64]Cache)
 
-func start_cache(repoRoot string) C.int {
+func start_cache(repoRoot string, ret_handle *uint64) C.int {
+	var g Cache
+
 	g.ctx, g.cancel = context.WithCancel(context.Background())
 
 	r, err := openOrCreateRepo(repoRoot);
@@ -174,31 +177,45 @@ func start_cache(repoRoot string) C.int {
 
 	g.api = coreapi.NewCoreAPI(g.node)
 
+	*ret_handle = g_next_cache_id
+	gs[g_next_cache_id] = g
+	g_next_cache_id += 1
+
 	return C.IPFS_SUCCESS
 }
 
 //export go_asio_ipfs_start
-func go_asio_ipfs_start(c_repoPath *C.char) C.int {
+func go_asio_ipfs_start(c_repoPath *C.char, ret_handle unsafe.Pointer) C.int {
 	repoRoot := C.GoString(c_repoPath)
-	return start_cache(repoRoot);
+	return start_cache(repoRoot, (*uint64)(ret_handle));
 }
 
 //export go_asio_ipfs_async_start
 func go_asio_ipfs_async_start(c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	repoRoot := C.GoString(c_repoPath)
 	go func() {
-		err := start_cache(repoRoot);
-		C.execute_void_cb(fn, err, fn_arg)
+		var ret_handle uint64
+
+		err := start_cache(repoRoot, &ret_handle);
+
+		C.execute_data_cb(fn,
+			err,
+			unsafe.Pointer(&ret_handle),
+			C.size_t(unsafe.Sizeof(ret_handle)),
+			fn_arg)
 	}()
 }
 
 //export go_asio_ipfs_stop
-func go_asio_ipfs_stop() {
-	g.cancel()
+func go_asio_ipfs_stop(handle uint64) {
+	gs[handle].cancel()
+	delete(gs, handle)
 }
 
 //export go_asio_ipfs_resolve
-func go_asio_ipfs_resolve(c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_resolve(handle uint64, c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	ipns_id := C.GoString(c_ipns_id)
 
 	go func() {
@@ -228,7 +245,9 @@ func go_asio_ipfs_resolve(c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Po
 
 // IMPORTANT: The returned value needs to be explicitly `free`d.
 //export go_asio_ipfs_ipns_id
-func go_asio_ipfs_ipns_id() *C.char {
+func go_asio_ipfs_ipns_id(handle uint64) *C.char {
+	var g = gs[handle]
+
 	pid, err := peer.IDFromPrivateKey(g.node.PrivateKey)
 
 	if err != nil {
@@ -261,7 +280,9 @@ func publish(ctx context.Context, duration time.Duration, n *core.IpfsNode, cid 
 }
 
 //export go_asio_ipfs_publish
-func go_asio_ipfs_publish(cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_publish(handle uint64, cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	id := C.GoString(cid)
 
 	go func() {
@@ -283,7 +304,9 @@ func go_asio_ipfs_publish(cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_
 }
 
 //export go_asio_ipfs_add
-func go_asio_ipfs_add(data unsafe.Pointer, size C.size_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	msg := C.GoBytes(data, C.int(size))
 
 	go func() {
@@ -308,7 +331,9 @@ func go_asio_ipfs_add(data unsafe.Pointer, size C.size_t, fn unsafe.Pointer, fn_
 }
 
 //export go_asio_ipfs_cat
-func go_asio_ipfs_cat(c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_cat(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	cid := C.GoString(c_cid)
 
 	go func() {
@@ -340,7 +365,9 @@ func go_asio_ipfs_cat(c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 }
 
 //export go_asio_ipfs_pin
-func go_asio_ipfs_pin(c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_pin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	cid := C.GoString(c_cid)
 
 	go func() {
@@ -370,7 +397,9 @@ func go_asio_ipfs_pin(c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 }
 
 //export go_asio_ipfs_unpin
-func go_asio_ipfs_unpin(c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_unpin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+	var g = gs[handle]
+
 	cid := C.GoString(c_cid)
 
 	go func() {

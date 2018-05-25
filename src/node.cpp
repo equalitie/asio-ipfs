@@ -14,6 +14,8 @@ namespace asio  = boost::asio;
 namespace sys   = boost::system;
 namespace intr = boost::intrusive;
 
+static const uint64_t INVALID_IPFS_HANDLE = uint64_t(-1);
+
 template<class F> struct Defer {
     F f;
     ~Defer() { f(); }
@@ -30,7 +32,8 @@ struct HandleBase : public intr::list_base_hook
 };
 
 struct asio_ipfs::node_impl {
-    // This prevents callbacks from being called once Backend is destroyed.
+    uint64_t ipfs_handle = INVALID_IPFS_HANDLE;
+    // This prevents callbacks from being called once the node is destroyed.
     bool was_destroyed;
     asio::io_service& ios;
     mutex destruct_mutex;
@@ -90,6 +93,11 @@ struct Handle : public HandleBase {
         call(err, arg, string(data, data + size));
     }
 
+    static void call_uint64(int err, const char* data, size_t size, void* arg) {
+        assert(size == sizeof(uint64_t));
+        call(err, arg, *reinterpret_cast<const uint64_t*>(data));
+    }
+
     void cancel() override {
         work = boost::none;
         std::get<0>(args) = asio::error::operation_aborted;
@@ -107,13 +115,16 @@ void node::build_( asio::io_service& ios
 {
     auto impl = make_shared<node_impl>(ios);
 
-    auto cb_ = [cb = move(cb), impl] (const sys::error_code& ec) {
+    auto cb_ = [cb = move(cb), impl]
+               (const sys::error_code& ec, uint64_t ipfs_handle) {
+        if (ec) return cb(ec, nullptr);
+        impl->ipfs_handle = ipfs_handle;
         cb(ec, unique_ptr<node>(new node(move(impl))));
     };
 
     go_asio_ipfs_async_start( (char*) repo_path.data()
-                            , (void*) Handle<>::call_void
-                            , (void*) new Handle<>{impl, move(cb_)});
+                            , (void*) Handle<uint64_t>::call_uint64
+                            , (void*) new Handle<uint64_t>{impl, move(cb_)});
 }
 
 node::node(shared_ptr<node_impl> impl)
@@ -124,7 +135,7 @@ node::node(shared_ptr<node_impl> impl)
 node::node(asio::io_service& ios, const string& repo_path)
     : _impl(make_shared<node_impl>(ios))
 {
-    int ec = go_asio_ipfs_start((char*) repo_path.data());
+    int ec = go_asio_ipfs_start((char*) repo_path.data(), &_impl->ipfs_handle);
 
     if (ec != IPFS_SUCCESS) {
         throw std::runtime_error("node: Failed to start IPFS");
@@ -132,7 +143,7 @@ node::node(asio::io_service& ios, const string& repo_path)
 }
 
 string node::ipns_id() const {
-    char* cid = go_asio_ipfs_ipns_id();
+    char* cid = go_asio_ipfs_ipns_id(_impl->ipfs_handle);
     string ret(cid);
     free(cid);
     return ret;
@@ -143,8 +154,10 @@ void node::publish_(const string& cid, Timer::duration d, std::function<void(sys
     using namespace std::chrono;
 
     assert(cid.size() == CID_SIZE);
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    go_asio_ipfs_publish( (char*) cid.data()
+    go_asio_ipfs_publish( _impl->ipfs_handle
+                        , (char*) cid.data()
                         , duration_cast<seconds>(d).count()
                         , (void*) Handle<>::call_void
                         , (void*) new Handle<>{_impl, move(cb)});
@@ -152,14 +165,20 @@ void node::publish_(const string& cid, Timer::duration d, std::function<void(sys
 
 void node::resolve_(const string& ipns_id, function<void(sys::error_code, string)> cb)
 {
-    go_asio_ipfs_resolve( (char*) ipns_id.data()
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
+
+    go_asio_ipfs_resolve( _impl->ipfs_handle
+                        , (char*) ipns_id.data()
                         , (void*) Handle<string>::call_data
                         , (void*) new Handle<string>{_impl, move(cb)} );
 }
 
 void node::add_(const uint8_t* data, size_t size, function<void(sys::error_code, string)> cb)
 {
-    go_asio_ipfs_add( (void*) data, size
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
+
+    go_asio_ipfs_add( _impl->ipfs_handle
+                    , (void*) data, size
                     , (void*) Handle<string>::call_data
                     , (void*) new Handle<string>{_impl, move(cb)} );
 }
@@ -167,8 +186,10 @@ void node::add_(const uint8_t* data, size_t size, function<void(sys::error_code,
 void node::cat_(const string& ipfs_id, function<void(sys::error_code, string)> cb)
 {
     assert(ipfs_id.size() == CID_SIZE);
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    go_asio_ipfs_cat( (char*) ipfs_id.data()
+    go_asio_ipfs_cat( _impl->ipfs_handle
+                    , (char*) ipfs_id.data()
                     , (void*) Handle<string>::call_data
                     , (void*) new Handle<string>{_impl, move(cb)} );
 }
@@ -176,8 +197,10 @@ void node::cat_(const string& ipfs_id, function<void(sys::error_code, string)> c
 void node::pin_(const string& cid, std::function<void(sys::error_code)> cb)
 {
     assert(cid.size() == CID_SIZE);
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    go_asio_ipfs_pin( (char*) cid.data()
+    go_asio_ipfs_pin( _impl->ipfs_handle
+                    , (char*) cid.data()
                     , (void*) Handle<>::call_void
                     , (void*) new Handle<>{_impl, move(cb)});
 }
@@ -185,8 +208,10 @@ void node::pin_(const string& cid, std::function<void(sys::error_code)> cb)
 void node::unpin_(const string& cid, std::function<void(sys::error_code)> cb)
 {
     assert(cid.size() == CID_SIZE);
+    assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    go_asio_ipfs_unpin( (char*) cid.data()
+    go_asio_ipfs_unpin( _impl->ipfs_handle
+                      , (char*) cid.data()
                       , (void*) Handle<>::call_void
                       , (void*) new Handle<>{_impl, move(cb)});
 }
@@ -214,5 +239,7 @@ node::~node()
         i = j;
     }
 
-    go_asio_ipfs_stop();
+    if (_impl->ipfs_handle != INVALID_IPFS_HANDLE) {
+        go_asio_ipfs_stop(_impl->ipfs_handle);
+    }
 }
