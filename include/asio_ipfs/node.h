@@ -4,10 +4,7 @@
 #include <functional>
 #include <memory>
 #include <boost/asio/steady_timer.hpp>
-
-namespace boost { namespace asio {
-    class io_service;
-}}
+#include <boost/asio/io_service.hpp>
 
 namespace asio_ipfs {
 
