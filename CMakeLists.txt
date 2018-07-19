@@ -82,8 +82,9 @@ set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/gopath")
 # IPFS releases
 set(IPFS_V0_4_14 "5db38464bfea73e94cb96e011cf93051fe691e65")
 set(IPFS_V0_4_15 "7853e53860805e08a212d78c4baa5d59bff99ba8")
+set(IPFS_V0_4_16 "7853e53860805e08a212d78c4baa5d59bff99ba8")
 
-set(IPFS_GO_COMMIT ${IPFS_V0_4_15})
+set(IPFS_GO_COMMIT ${IPFS_V0_4_16})
 
 externalproject_add(go-ipfs
     DOWNLOAD_COMMAND mkdir -p ${GOPATH}
