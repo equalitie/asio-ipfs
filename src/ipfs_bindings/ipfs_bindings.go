@@ -376,7 +376,7 @@ func go_asio_ipfs_pin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg un
 			defer fmt.Println("go_asio_ipfs_pin end");
 		}
 
-		path, err := coreapi.ParsePath(cid)
+		path, err := coreiface.ParsePath(cid)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_pin failed to unpin %q %q\n", cid, err)
@@ -408,7 +408,7 @@ func go_asio_ipfs_unpin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg 
 			defer fmt.Println("go_asio_ipfs_unpin end");
 		}
 
-		path, err := coreapi.ParsePath(cid)
+		path, err := coreiface.ParsePath(cid)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_pin failed to unpin %q %q\n", cid, err)
