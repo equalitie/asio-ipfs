@@ -145,6 +145,9 @@ type Node struct {
 	api coreiface.CoreAPI
 	ctx context.Context
 	cancel context.CancelFunc
+
+    next_cancel_signal_id C.uint64_t
+    cancel_signals map[C.uint64_t]func()
 }
 
 var g_next_node_id uint64 = 0
@@ -154,6 +157,9 @@ func start_node(repoRoot string, ret_handle *uint64) C.int {
 	var n Node
 
 	n.ctx, n.cancel = context.WithCancel(context.Background())
+
+    n.next_cancel_signal_id = 0
+    n.cancel_signals = make(map[C.uint64_t]func())
 
 	r, err := openOrCreateRepo(repoRoot);
 
@@ -212,23 +218,50 @@ func go_asio_ipfs_stop(handle uint64) {
 	delete(g_nodes, handle)
 }
 
+func withCancel(n Node, cancel_signal *C.uint64_t) (context.Context, C.uint64_t) {
+    ctx, cancel := context.WithCancel(n.ctx)
+    id := n.next_cancel_signal_id
+    n.next_cancel_signal_id += 1
+    n.cancel_signals[id] = cancel
+    return ctx, id
+}
+
+func freeCancel(n Node, id C.uint64_t) {
+    cancel, ok := n.cancel_signals[id]
+    if !ok {
+        return
+    }
+    cancel()
+    delete(n.cancel_signals, id)
+}
+
+//export go_asio_ipfs_cancel
+func go_asio_ipfs_cancel(handle uint64, cancel_signal C.uint64_t) {
+    n, ok := g_nodes[handle]
+    if !ok { return }
+    freeCancel(n, cancel_signal)
+}
+
 //export go_asio_ipfs_resolve
-func go_asio_ipfs_resolve(handle uint64, c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_resolve(handle uint64, cancel_signal_p *C.uint64_t, c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	ipns_id := C.GoString(c_ipns_id)
 
+    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+
 	go func() {
+        defer freeCancel(n, cancel_signal)
+
 		if debug {
 			fmt.Println("go_asio_ipfs_resolve start");
 			defer fmt.Println("go_asio_ipfs_resolve end");
 		}
 
-		ctx := n.ctx
 		n := n.node
 		p := path.Path("/ipns/" + ipns_id)
 
-		node, err := core.Resolve(ctx, n.Namesys, n.Resolver, p)
+		node, err := core.Resolve(cancel_ctx, n.Namesys, n.Resolver, p)
 
 		if err != nil {
 			C.execute_data_cb(fn, C.IPFS_RESOLVE_FAILED, nil, C.size_t(0), fn_arg)
@@ -280,19 +313,23 @@ func publish(ctx context.Context, duration time.Duration, n *core.IpfsNode, cid 
 }
 
 //export go_asio_ipfs_publish
-func go_asio_ipfs_publish(handle uint64, cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_publish(handle uint64, cancel_signal_p *C.uint64_t, cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	id := C.GoString(cid)
 
+    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+
 	go func() {
+        defer freeCancel(n, cancel_signal)
+
 		if debug {
 			fmt.Println("go_asio_ipfs_publish start");
 			defer fmt.Println("go_asio_ipfs_publish end");
 		}
 
 		// https://stackoverflow.com/questions/17573190/how-to-multiply-duration-by-integer
-		err := publish(n.ctx, time.Duration(seconds) * time.Second, n.node, id);
+		err := publish(cancel_ctx, time.Duration(seconds) * time.Second, n.node, id);
 
 		if err != nil {
 			C.execute_void_cb(fn, C.IPFS_PUBLISH_FAILED, fn_arg)
@@ -331,18 +368,22 @@ func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsa
 }
 
 //export go_asio_ipfs_cat
-func go_asio_ipfs_cat(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_cat(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
+    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+
 	go func() {
+        defer freeCancel(n, cancel_signal);
+
 		if debug {
 			fmt.Println("go_asio_ipfs_cat start");
 			defer fmt.Println("go_asio_ipfs_cat end");
 		}
 
-		reader, err := coreunix.Cat(n.ctx, n.node, cid)
+		reader, err := coreunix.Cat(cancel_ctx, n.node, cid)
 
 		if err != nil {
 			fmt.Println("go_asio_ipfs_cat failed to Cat");
@@ -365,12 +406,16 @@ func go_asio_ipfs_cat(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg un
 }
 
 //export go_asio_ipfs_pin
-func go_asio_ipfs_pin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_pin(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
+    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+
 	go func() {
+        defer freeCancel(n, cancel_signal);
+
 		if debug {
 			fmt.Println("go_asio_ipfs_pin start");
 			defer fmt.Println("go_asio_ipfs_pin end");
@@ -384,7 +429,7 @@ func go_asio_ipfs_pin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg un
 			return
 		}
 
-		err = n.api.Pin().Add(n.ctx, path)
+		err = n.api.Pin().Add(cancel_ctx, path)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_pin failed to unpin %q %q\n", cid, err)
@@ -397,12 +442,16 @@ func go_asio_ipfs_pin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg un
 }
 
 //export go_asio_ipfs_unpin
-func go_asio_ipfs_unpin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_unpin(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
+    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+
 	go func() {
+        freeCancel(n, cancel_signal);
+
 		if debug {
 			fmt.Println("go_asio_ipfs_unpin start");
 			defer fmt.Println("go_asio_ipfs_unpin end");
@@ -416,7 +465,7 @@ func go_asio_ipfs_unpin(handle uint64, c_cid *C.char, fn unsafe.Pointer, fn_arg 
 			return
 		}
 
-		err = n.api.Pin().Rm(n.ctx, path)
+		err = n.api.Pin().Rm(cancel_ctx, path)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_unpin failed to unpin %q %q\n", cid, err);

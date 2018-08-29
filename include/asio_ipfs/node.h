@@ -12,6 +12,7 @@ struct node_impl;
 
 class node {
     using Timer = boost::asio::steady_timer;
+    using Cancel = std::function<void()>;
 
     template<class Token, class... Ret>
     using Handler = typename boost::asio::handler_type
@@ -55,15 +56,35 @@ public:
 
     template<class Token>
     typename Result<Token, std::string>::type
+    add(const uint8_t* data, size_t size, Cancel&, Token&&);
+
+    template<class Token>
+    typename Result<Token, std::string>::type
+    add(const std::string&, Cancel&, Token&&); // Convenience function.
+
+    template<class Token>
+    typename Result<Token, std::string>::type
     cat(const std::string& cid, Token&&);
+
+    template<class Token>
+    typename Result<Token, std::string>::type
+    cat(const std::string& cid, Cancel&, Token&&);
 
     template<class Token>
     void
     publish(const std::string& cid, Timer::duration, Token&&);
 
     template<class Token>
+    void
+    publish(const std::string& cid, Timer::duration, Cancel&, Token&&);
+
+    template<class Token>
     typename Result<Token, std::string>::type
     resolve(const std::string& node_id, Token&&);
+
+    template<class Token>
+    typename Result<Token, std::string>::type
+    resolve(const std::string& node_id, Cancel&, Token&&);
 
     template<class Token>
     void
@@ -71,7 +92,15 @@ public:
 
     template<class Token>
     void
+    pin(const std::string& cid, Cancel&, Token&&);
+
+    template<class Token>
+    void
     unpin(const std::string& cid, Token&&);
+
+    template<class Token>
+    void
+    unpin(const std::string& cid, Cancel&, Token&&);
 
     boost::asio::io_service& get_io_service();
 
@@ -79,6 +108,8 @@ public:
 
 private:
     node(std::shared_ptr<node_impl>);
+
+    Cancel make_cancel_fn(uint64_t cancel_signal_id);
 
 private:
     static
@@ -91,18 +122,24 @@ private:
              , std::function<void(boost::system::error_code, std::string)>);
 
     void cat_( const std::string& cid
+             , Cancel&
              , std::function<void(boost::system::error_code, std::string)>);
 
-    void publish_( const std::string& cid, Timer::duration
+    void publish_( const std::string& cid
+                 , Timer::duration
+                 , Cancel&
                  , std::function<void(boost::system::error_code)>);
 
     void resolve_( const std::string& ipns_id
+                 , Cancel&
                  , std::function<void(boost::system::error_code, std::string)>);
 
     void pin_( const std::string& cid
+             , Cancel&
              , std::function<void(boost::system::error_code)>);
 
     void unpin_( const std::string& cid
+               , Cancel&
                , std::function<void(boost::system::error_code)>);
 
 private:
@@ -152,9 +189,18 @@ inline
 typename node::Result<Token, std::string>::type
 node::cat(const std::string& cid, Token&& token)
 {
+    Cancel cancel;
+    return cat(cid, cancel, std::forward<Token>(token));
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::string>::type
+node::cat(const std::string& cid, Cancel& cancel, Token&& token)
+{
     Handler<Token, std::string> handler(std::forward<Token>(token));
     Result<Token, std::string> result(handler);
-    cat_(cid, std::move(handler));
+    cat_(cid, cancel, std::move(handler));
     return result.get();
 }
 
@@ -163,9 +209,18 @@ inline
 void
 node::publish(const std::string& cid, Timer::duration d, Token&& token)
 {
+    Cancel cancel;
+    return publish(cid, d, cancel, std::forward<Token>(token));
+}
+
+template<class Token>
+inline
+void
+node::publish(const std::string& cid, Timer::duration d, Cancel& cancel, Token&& token)
+{
     Handler<Token> handler(std::forward<Token>(token));
     Result<Token> result(handler);
-    publish_(cid, d, std::move(handler));
+    publish_(cid, d, cancel, std::move(handler));
     return result.get();
 }
 
@@ -174,9 +229,18 @@ inline
 typename node::Result<Token, std::string>::type
 node::resolve(const std::string& ipns_id, Token&& token)
 {
+    Cancel cancel;
+    return resolve(ipns_id, cancel, std::forward<Token>(token));
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::string>::type
+node::resolve(const std::string& ipns_id, Cancel& cancel, Token&& token)
+{
     Handler<Token, std::string> handler(std::forward<Token>(token));
     Result<Token, std::string> result(handler);
-    resolve_(ipns_id, std::move(handler));
+    resolve_(ipns_id, cancel, std::move(handler));
     return result.get();
 }
 
@@ -185,9 +249,18 @@ inline
 void
 node::pin(const std::string& cid, Token&& token)
 {
+    Cancel cancel;
+    return pin(cid, cancel, std::forward<Token>(token));
+}
+
+template<class Token>
+inline
+void
+node::pin(const std::string& cid, Cancel& cancel, Token&& token)
+{
     Handler<Token> handler(std::forward<Token>(token));
     Result<Token> result(handler);
-    pin_(cid, std::move(handler));
+    pin_(cid, cancel, std::move(handler));
     return result.get();
 }
 
@@ -196,9 +269,18 @@ inline
 void
 node::unpin(const std::string& cid, Token&& token)
 {
+    Cancel cancel;
+    return unpin(cid, cancel, std::forward<Token>(token));
+}
+
+template<class Token>
+inline
+void
+node::unpin(const std::string& cid, Cancel& cancel, Token&& token)
+{
     Handler<Token> handler(std::forward<Token>(token));
     Result<Token> result(handler);
-    unpin_(cid, std::move(handler));
+    unpin_(cid, cancel, std::move(handler));
     return result.get();
 }
 
