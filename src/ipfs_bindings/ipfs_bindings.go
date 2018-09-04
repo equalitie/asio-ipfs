@@ -116,6 +116,10 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 			conf.Addresses.Swarm[i] = setRandomPort(addr)
 		}
 
+		conf.Swarm.ConnMgr.LowWater = 5
+		conf.Swarm.ConnMgr.HighWater = 10
+		conf.Swarm.ConnMgr.GracePeriod = time.Minute.String()
+
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
 			return nil, err
 		}
