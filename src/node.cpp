@@ -15,6 +15,7 @@ namespace sys  = boost::system;
 namespace intr = boost::intrusive;
 
 static const uint64_t INVALID_IPFS_HANDLE = uint64_t(-1);
+static const uint64_t INVALID_CANCEL_SIGNAL_ID = uint64_t(-1);
 
 template<class F> struct Defer {
     F f;
@@ -49,16 +50,31 @@ template<class... As>
 struct Handle : public HandleBase {
     shared_ptr<node_impl> impl;
     function<void(sys::error_code, As&&...)> cb;
+    function<void()>* cancel_fn;
     boost::optional<asio::io_service::work> work;
     tuple<sys::error_code, As...> args;
+    bool was_canceled = false;
 
     Handle( shared_ptr<node_impl> impl_
+          , uint64_t cancel_signal_id
+          , function<void()>* cancel_fn
           , function<void(sys::error_code, As&&...)> cb)
         : impl(move(impl_))
         , cb(move(cb))
+        , cancel_fn(cancel_fn)
         , work(asio::io_service::work(impl->ios))
     {
         impl->handles.push_back(*this);
+
+        if (cancel_fn) {
+            *this->cancel_fn = [ h = impl->ipfs_handle
+                               , id = cancel_signal_id
+                               , &was_canceled = was_canceled] {
+                if (was_canceled) return;
+                was_canceled = true;
+                go_asio_ipfs_cancel(h, id);
+            };
+        }
     }
 
     static void call(int err, void* arg, As... args) {
@@ -67,20 +83,24 @@ struct Handle : public HandleBase {
 
         lock_guard<mutex> guard(self->impl->destruct_mutex);
 
-        // Already cancelled?
+        // Already cancelled? (by destroying asio_ipfs::node)
         if (!self->cb) { delete self; return; }
 
         self->unlink();
 
-        auto ec = self->impl->was_destroyed
-                ? asio::error::operation_aborted
-                : make_error_code(error::ipfs_error{err});
-
-        self->args = make_tuple(ec, move(args)...);
+        self->args = make_tuple( make_error_code(error::ipfs_error{err})
+                               , move(args)...);
 
         ios.dispatch([self] {
             auto on_exit = defer([=] { delete self; });
-            if (self->impl->was_destroyed) return;
+            if (self->impl->was_destroyed) {
+                // cb has already been scheduled for execution from ~node()
+                return;
+            }
+            if (self->was_canceled) {
+                std::get<0>(self->args) = asio::error::operation_aborted;
+            }
+            if (self->cancel_fn) *self->cancel_fn = nullptr;
             std::experimental::apply(self->cb, move(self->args));
         });
     }
@@ -124,7 +144,10 @@ void node::build_( asio::io_service& ios
 
     go_asio_ipfs_async_start( (char*) repo_path.data()
                             , (void*) Handle<uint64_t>::call_uint64
-                            , (void*) new Handle<uint64_t>{impl, move(cb_)});
+                            , (void*) new Handle<uint64_t>{ impl
+                                                          , INVALID_CANCEL_SIGNAL_ID
+                                                          , nullptr
+                                                          , move(cb_)});
 }
 
 node::node(shared_ptr<node_impl> impl)
@@ -149,16 +172,9 @@ string node::id() const {
     return ret;
 }
 
-node::Cancel node::make_cancel_fn(uint64_t cancel_signal_id)
-{
-    return [h = _impl->ipfs_handle, id = cancel_signal_id] {
-        go_asio_ipfs_cancel(h, id);
-    };
-}
-
 void node::publish_( const string& cid
                    , Timer::duration d
-                   , Cancel& cancel
+                   , Cancel* cancel
                    , std::function<void(sys::error_code)> cb)
 {
     using namespace std::chrono;
@@ -166,33 +182,37 @@ void node::publish_( const string& cid
     assert(cid.size() == CID_SIZE);
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    uint64_t cancel_signal_id = -1;
+    uint64_t cancel_signal_id
+        = go_asio_ipfs_make_unique_cancel_signal_id(_impl->ipfs_handle);
 
     go_asio_ipfs_publish( _impl->ipfs_handle
-                        , &cancel_signal_id
+                        , cancel_signal_id
                         , (char*) cid.data()
                         , duration_cast<seconds>(d).count()
                         , (void*) Handle<>::call_void
-                        , (void*) new Handle<>{_impl, move(cb)});
-
-    cancel = make_cancel_fn(cancel_signal_id);
+                        , (void*) new Handle<>{ _impl
+                                              , cancel_signal_id
+                                              , cancel
+                                              , move(cb)});
 }
 
 void node::resolve_( const string& node_id
-                   , Cancel& cancel
+                   , Cancel* cancel
                    , function<void(sys::error_code, string)> cb)
 {
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    uint64_t cancel_signal_id = -1;
+    uint64_t cancel_signal_id
+        = go_asio_ipfs_make_unique_cancel_signal_id(_impl->ipfs_handle);
 
     go_asio_ipfs_resolve( _impl->ipfs_handle
-                        , &cancel_signal_id
+                        , cancel_signal_id
                         , (char*) node_id.data()
                         , (void*) Handle<string>::call_data
-                        , (void*) new Handle<string>{_impl, move(cb)} );
-
-    cancel = make_cancel_fn(cancel_signal_id);
+                        , (void*) new Handle<string>{ _impl
+                                                    , cancel_signal_id
+                                                    , cancel
+                                                    , move(cb)} );
 }
 
 void node::add_( const uint8_t* data
@@ -201,65 +221,73 @@ void node::add_( const uint8_t* data
 {
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-
     go_asio_ipfs_add( _impl->ipfs_handle
                     , (void*) data, size
                     , (void*) Handle<string>::call_data
-                    , (void*) new Handle<string>{_impl, move(cb)} );
+                    , (void*) new Handle<string>{ _impl
+                                                , INVALID_CANCEL_SIGNAL_ID
+                                                , nullptr
+                                                , move(cb)} );
 }
 
 void node::cat_( const string& cid
-               , Cancel& cancel
+               , Cancel* cancel
                , function<void(sys::error_code, string)> cb)
 {
     assert(cid.size() == CID_SIZE);
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    uint64_t cancel_signal_id = -1;
+    uint64_t cancel_signal_id
+        = go_asio_ipfs_make_unique_cancel_signal_id(_impl->ipfs_handle);
 
     go_asio_ipfs_cat( _impl->ipfs_handle
-                    , &cancel_signal_id
+                    , cancel_signal_id
                     , (char*) cid.data()
                     , (void*) Handle<string>::call_data
-                    , (void*) new Handle<string>{_impl, move(cb)} );
-
-    cancel = make_cancel_fn(cancel_signal_id);
+                    , (void*) new Handle<string>{ _impl
+                                                , cancel_signal_id
+                                                , cancel
+                                                , move(cb)} );
 }
 
 void node::pin_( const string& cid
-               , Cancel& cancel
+               , Cancel* cancel
                , std::function<void(sys::error_code)> cb)
 {
     assert(cid.size() == CID_SIZE);
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    uint64_t cancel_signal_id = -1;
+    uint64_t cancel_signal_id
+        = go_asio_ipfs_make_unique_cancel_signal_id(_impl->ipfs_handle);
 
     go_asio_ipfs_pin( _impl->ipfs_handle
-                    , &cancel_signal_id
+                    , cancel_signal_id
                     , (char*) cid.data()
                     , (void*) Handle<>::call_void
-                    , (void*) new Handle<>{_impl, move(cb)});
-
-    cancel = make_cancel_fn(cancel_signal_id);
+                    , (void*) new Handle<>{ _impl
+                                          , cancel_signal_id
+                                          , cancel
+                                          , move(cb)});
 }
 
 void node::unpin_( const string& cid
-                 , Cancel& cancel
+                 , Cancel* cancel
                  , std::function<void(sys::error_code)> cb)
 {
     assert(cid.size() == CID_SIZE);
     assert(_impl->ipfs_handle != INVALID_IPFS_HANDLE);
 
-    uint64_t cancel_signal_id = -1;
+    uint64_t cancel_signal_id
+        = go_asio_ipfs_make_unique_cancel_signal_id(_impl->ipfs_handle);
 
     go_asio_ipfs_unpin( _impl->ipfs_handle
-                      , &cancel_signal_id
+                      , cancel_signal_id
                       , (char*) cid.data()
                       , (void*) Handle<>::call_void
-                      , (void*) new Handle<>{_impl, move(cb)});
-
-    cancel = make_cancel_fn(cancel_signal_id);
+                      , (void*) new Handle<>{ _impl
+                                            , cancel_signal_id
+                                            , cancel
+                                            , move(cb)});
 }
 
 boost::asio::io_service& node::get_io_service()

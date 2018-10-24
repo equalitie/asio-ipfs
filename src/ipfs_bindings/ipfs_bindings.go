@@ -218,12 +218,10 @@ func go_asio_ipfs_stop(handle uint64) {
 	delete(g_nodes, handle)
 }
 
-func withCancel(n Node, cancel_signal *C.uint64_t) (context.Context, C.uint64_t) {
+func withCancel(n Node, cancel_signal_id C.uint64_t) (context.Context) {
     ctx, cancel := context.WithCancel(n.ctx)
-    id := n.next_cancel_signal_id
-    n.next_cancel_signal_id += 1
-    n.cancel_signals[id] = cancel
-    return ctx, id
+    n.cancel_signals[cancel_signal_id] = cancel
+    return ctx
 }
 
 func freeCancel(n Node, id C.uint64_t) {
@@ -235,6 +233,15 @@ func freeCancel(n Node, id C.uint64_t) {
     delete(n.cancel_signals, id)
 }
 
+//export go_asio_ipfs_make_unique_cancel_signal_id
+func go_asio_ipfs_make_unique_cancel_signal_id(handle uint64) C.uint64_t {
+    n, ok := g_nodes[handle]
+    if !ok { return C.uint64_t(1<<64 - 1 /* max uint64 */) }
+    ret := n.next_cancel_signal_id
+    n.next_cancel_signal_id += 1
+    return ret
+}
+
 //export go_asio_ipfs_cancel
 func go_asio_ipfs_cancel(handle uint64, cancel_signal C.uint64_t) {
     n, ok := g_nodes[handle]
@@ -243,12 +250,12 @@ func go_asio_ipfs_cancel(handle uint64, cancel_signal C.uint64_t) {
 }
 
 //export go_asio_ipfs_resolve
-func go_asio_ipfs_resolve(handle uint64, cancel_signal_p *C.uint64_t, c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_resolve(handle uint64, cancel_signal C.uint64_t, c_ipns_id *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	ipns_id := C.GoString(c_ipns_id)
 
-    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+    cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
         defer freeCancel(n, cancel_signal)
@@ -313,12 +320,12 @@ func publish(ctx context.Context, duration time.Duration, n *core.IpfsNode, cid 
 }
 
 //export go_asio_ipfs_publish
-func go_asio_ipfs_publish(handle uint64, cancel_signal_p *C.uint64_t, cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_publish(handle uint64, cancel_signal C.uint64_t, cid *C.char, seconds C.int64_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	id := C.GoString(cid)
 
-    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+    cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
         defer freeCancel(n, cancel_signal)
@@ -368,12 +375,12 @@ func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsa
 }
 
 //export go_asio_ipfs_cat
-func go_asio_ipfs_cat(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+    cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
         defer freeCancel(n, cancel_signal);
@@ -406,12 +413,12 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char,
 }
 
 //export go_asio_ipfs_pin
-func go_asio_ipfs_pin(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_pin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+    cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
         defer freeCancel(n, cancel_signal);
@@ -442,12 +449,12 @@ func go_asio_ipfs_pin(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char,
 }
 
 //export go_asio_ipfs_unpin
-func go_asio_ipfs_unpin(handle uint64, cancel_signal_p *C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_unpin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx, cancel_signal := withCancel(n, cancel_signal_p)
+    cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
         freeCancel(n, cancel_signal);
