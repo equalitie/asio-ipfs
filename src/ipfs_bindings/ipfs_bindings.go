@@ -393,7 +393,7 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 		reader, err := coreunix.Cat(cancel_ctx, n.node, cid)
 
 		if err != nil {
-			fmt.Println("go_asio_ipfs_cat failed to Cat");
+			fmt.Printf("go_asio_ipfs_cat failed to Cat %q\n", err);
 			C.execute_data_cb(fn, C.IPFS_CAT_FAILED, nil, C.size_t(0), fn_arg)
 			return
 		}
