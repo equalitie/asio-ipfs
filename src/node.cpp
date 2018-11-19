@@ -37,7 +37,7 @@ struct asio_ipfs::node_impl {
     // This prevents callbacks from being called once the node is destroyed.
     bool was_destroyed;
     asio::io_service& ios;
-    mutex destruct_mutex;
+    mutex mu;
     intr::list<HandleBase, intr::constant_time_size<false>> handles;
 
     node_impl(asio::io_service& ios)
@@ -69,7 +69,10 @@ struct Handle : public HandleBase {
         if (cancel_fn) {
             *this->cancel_fn = [ h = impl->ipfs_handle
                                , id = cancel_signal_id
+                               , &mu = impl->mu
                                , &was_canceled = was_canceled] {
+                lock_guard<mutex> guard(mu);
+
                 if (was_canceled) return;
                 was_canceled = true;
                 go_asio_ipfs_cancel(h, id);
@@ -81,7 +84,7 @@ struct Handle : public HandleBase {
         auto self = reinterpret_cast<Handle*>(arg);
         auto& ios = self->impl->ios;
 
-        lock_guard<mutex> guard(self->impl->destruct_mutex);
+        lock_guard<mutex> guard(self->impl->mu);
 
         // Already cancelled? (by destroying asio_ipfs::node)
         if (!self->cb) { delete self; return; }
@@ -299,7 +302,7 @@ node::~node()
 {
     if (!_impl) return; // Was moved from.
 
-    lock_guard<mutex> guard(_impl->destruct_mutex);
+    lock_guard<mutex> guard(_impl->mu);
     _impl->was_destroyed = true;
 
     // Make sure all handlers get completed.
