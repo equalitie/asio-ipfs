@@ -15,6 +15,7 @@ import (
 	"io"
 	"strings"
 	"io/ioutil"
+	"sync"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
 	coreiface "github.com/ipfs/go-ipfs/core/coreapi/interface"
@@ -232,22 +233,33 @@ func freeCancel(n *Node, id C.uint64_t) {
 	cancel()
 	delete(n.cancel_signals, id)
 }
+
+func freeCancelLocked(n *Node, id C.uint64_t) {
+	g_cancel_signal_mutex.Lock();
+	freeCancel(n, id);
+	g_cancel_signal_mutex.Unlock();
 }
 
 //export go_asio_ipfs_make_unique_cancel_signal_id
 func go_asio_ipfs_make_unique_cancel_signal_id(handle uint64) C.uint64_t {
-    n, ok := g_nodes[handle]
-    if !ok { return C.uint64_t(1<<64 - 1 /* max uint64 */) }
-    ret := n.next_cancel_signal_id
-    n.next_cancel_signal_id += 1
-    return ret
+	g_cancel_signal_mutex.Lock();
+	defer g_cancel_signal_mutex.Unlock();
+
+	n, ok := g_nodes[handle]
+	if !ok { return C.uint64_t(1<<64 - 1 /* max uint64 */) }
+	ret := n.next_cancel_signal_id
+	n.next_cancel_signal_id += 1
+	return ret
 }
 
 //export go_asio_ipfs_cancel
 func go_asio_ipfs_cancel(handle uint64, cancel_signal C.uint64_t) {
-    n, ok := g_nodes[handle]
-    if !ok { return }
-    freeCancel(n, cancel_signal)
+	g_cancel_signal_mutex.Lock();
+	defer g_cancel_signal_mutex.Unlock();
+
+	n, ok := g_nodes[handle]
+	if !ok { return }
+	freeCancel(n, cancel_signal)
 }
 
 //export go_asio_ipfs_resolve
@@ -256,10 +268,10 @@ func go_asio_ipfs_resolve(handle uint64, cancel_signal C.uint64_t, c_ipns_id *C.
 
 	ipns_id := C.GoString(c_ipns_id)
 
-    cancel_ctx := withCancel(n, cancel_signal)
+	cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
-        defer freeCancel(n, cancel_signal)
+		defer freeCancelLocked(n, cancel_signal)
 
 		if debug {
 			fmt.Println("go_asio_ipfs_resolve start");
@@ -326,10 +338,10 @@ func go_asio_ipfs_publish(handle uint64, cancel_signal C.uint64_t, cid *C.char, 
 
 	id := C.GoString(cid)
 
-    cancel_ctx := withCancel(n, cancel_signal)
+	cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
-        defer freeCancel(n, cancel_signal)
+		defer freeCancelLocked(n, cancel_signal)
 
 		if debug {
 			fmt.Println("go_asio_ipfs_publish start");
@@ -381,10 +393,10 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx := withCancel(n, cancel_signal)
+	cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
-        defer freeCancel(n, cancel_signal);
+		defer freeCancelLocked(n, cancel_signal);
 
 		if debug {
 			fmt.Println("go_asio_ipfs_cat start");
@@ -419,10 +431,10 @@ func go_asio_ipfs_pin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx := withCancel(n, cancel_signal)
+	cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
-        defer freeCancel(n, cancel_signal);
+		defer freeCancelLocked(n, cancel_signal);
 
 		if debug {
 			fmt.Println("go_asio_ipfs_pin start");
@@ -455,10 +467,10 @@ func go_asio_ipfs_unpin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, 
 
 	cid := C.GoString(c_cid)
 
-    cancel_ctx := withCancel(n, cancel_signal)
+	cancel_ctx := withCancel(n, cancel_signal)
 
 	go func() {
-        freeCancel(n, cancel_signal);
+		freeCancelLocked(n, cancel_signal);
 
 		if debug {
 			fmt.Println("go_asio_ipfs_unpin start");
