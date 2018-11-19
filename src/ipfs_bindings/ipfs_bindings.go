@@ -146,20 +146,22 @@ type Node struct {
 	ctx context.Context
 	cancel context.CancelFunc
 
-    next_cancel_signal_id C.uint64_t
-    cancel_signals map[C.uint64_t]func()
+	next_cancel_signal_id C.uint64_t
+	cancel_signals map[C.uint64_t]func()
 }
 
 var g_next_node_id uint64 = 0
-var g_nodes = make(map[uint64]Node)
+var g_nodes = make(map[uint64]*Node)
+var g_cancel_signal_mutex = sync.Mutex{}
+
 
 func start_node(repoRoot string, ret_handle *uint64) C.int {
 	var n Node
 
 	n.ctx, n.cancel = context.WithCancel(context.Background())
 
-    n.next_cancel_signal_id = 0
-    n.cancel_signals = make(map[C.uint64_t]func())
+	n.next_cancel_signal_id = 0
+	n.cancel_signals = make(map[C.uint64_t]func())
 
 	r, err := openOrCreateRepo(repoRoot);
 
@@ -184,7 +186,7 @@ func start_node(repoRoot string, ret_handle *uint64) C.int {
 	n.api = coreapi.NewCoreAPI(n.node)
 
 	*ret_handle = g_next_node_id
-	g_nodes[g_next_node_id] = n
+	g_nodes[g_next_node_id] = &n
 	g_next_node_id += 1
 
 	return C.IPFS_SUCCESS
@@ -218,19 +220,18 @@ func go_asio_ipfs_stop(handle uint64) {
 	delete(g_nodes, handle)
 }
 
-func withCancel(n Node, cancel_signal_id C.uint64_t) (context.Context) {
-    ctx, cancel := context.WithCancel(n.ctx)
-    n.cancel_signals[cancel_signal_id] = cancel
-    return ctx
+func withCancel(n *Node, cancel_signal_id C.uint64_t) (context.Context) {
+	ctx, cancel := context.WithCancel(n.ctx)
+	n.cancel_signals[cancel_signal_id] = cancel
+	return ctx
 }
 
-func freeCancel(n Node, id C.uint64_t) {
-    cancel, ok := n.cancel_signals[id]
-    if !ok {
-        return
-    }
-    cancel()
-    delete(n.cancel_signals, id)
+func freeCancel(n *Node, id C.uint64_t) {
+	cancel, ok := n.cancel_signals[id]
+	if !ok { return }
+	cancel()
+	delete(n.cancel_signals, id)
+}
 }
 
 //export go_asio_ipfs_make_unique_cancel_signal_id
