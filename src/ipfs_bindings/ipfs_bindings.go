@@ -21,11 +21,12 @@ import (
 	coreiface "github.com/ipfs/go-ipfs/core/coreapi/interface"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
-	config "github.com/ipfs/go-ipfs/repo/config"
-	path "github.com/ipfs/go-ipfs/path"
 	"github.com/ipfs/go-ipfs/core/coreunix"
 
-	peer "gx/ipfs/QmdVrMn1LhB4ybb8hMVaMLXnA8XRSewMnK6YqXKXoTcRvN/go-libp2p-peer"
+
+	"gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
+	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
+	peer "gx/ipfs/QmTRhk7cgjUf2gfQ3p2M9KPECNZEW9XUrmHcFCgog4cPgB/go-libp2p-peer"
 )
 
 // #cgo CFLAGS: -DIN_GO=1 -ggdb -I ${SRCDIR}/../../include
@@ -403,7 +404,15 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 			defer fmt.Println("go_asio_ipfs_cat end");
 		}
 
-		reader, err := coreunix.Cat(cancel_ctx, n.node, cid)
+		path, err := coreiface.ParsePath(cid);
+
+		if err != nil {
+			fmt.Printf("go_asio_ipfs_cat failed to parse cid %q\n", err);
+			C.execute_data_cb(fn, C.IPFS_CAT_FAILED, nil, C.size_t(0), fn_arg)
+			return
+		}
+
+		reader, err := n.api.Unixfs().Get(cancel_ctx, path)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_cat failed to Cat %q\n", err);
