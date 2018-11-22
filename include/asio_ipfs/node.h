@@ -32,8 +32,8 @@ public:
     // async `node::build` function instead.
     node(boost::asio::io_service&, const std::string& repo_path);
 
-    node(node&&) = default;
-    node& operator=(node&&) = default;
+    node(node&&);
+    node& operator=(node&&);
 
     node(const node&) = delete;
     node& operator=(const node&) = delete;
@@ -42,6 +42,11 @@ public:
     static
     typename Result<Token, std::unique_ptr<node>>::type
     build(boost::asio::io_service&, const std::string& repo_path, Token&&);
+
+    template<class Token>
+    static
+    typename Result<Token, std::unique_ptr<node>>::type
+    build(boost::asio::io_service&, const std::string& repo_path, Cancel&, Token&&);
 
     // Returns this node's IPFS ID
     std::string id() const;
@@ -107,16 +112,18 @@ public:
     ~node();
 
 private:
-    node(std::shared_ptr<node_impl>);
+    node();
 
 private:
     static
     void build_( boost::asio::io_service& ios
                , const std::string& repo_path
+               , Cancel* cancel
                , std::function<void( const boost::system::error_code&
                                    , std::unique_ptr<node>)>);
 
     void add_( const uint8_t* data, size_t size
+             , Cancel*
              , std::function<void(boost::system::error_code, std::string)>);
 
     void cat_( const std::string& cid
@@ -141,7 +148,7 @@ private:
                , std::function<void(boost::system::error_code)>);
 
 private:
-    std::shared_ptr<node_impl> _impl;
+    std::unique_ptr<node_impl> _impl;
 };
 
 template<class Token>
@@ -154,7 +161,22 @@ node::build( boost::asio::io_service& ios
     using BackendP = std::unique_ptr<node>;
     Handler<Token, BackendP> handler(std::forward<Token>(token));
     Result<Token, BackendP> result(handler);
-    build_(ios, repo_path, std::move(handler));
+    build_(ios, repo_path, nullptr, std::move(handler));
+    return result.get();
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::unique_ptr<node>>::type
+node::build( boost::asio::io_service& ios
+           , const std::string& repo_path
+           , Cancel& cancel
+           , Token&& token)
+{
+    using BackendP = std::unique_ptr<node>;
+    Handler<Token, BackendP> handler(std::forward<Token>(token));
+    Result<Token, BackendP> result(handler);
+    build_(ios, repo_path, &cancel, std::move(handler));
     return result.get();
 }
 
@@ -165,7 +187,18 @@ node::add(const uint8_t* data, size_t size, Token&& token)
 {
     Handler<Token, std::string> handler(std::forward<Token>(token));
     Result<Token, std::string> result(handler);
-    add_(data, size, std::move(handler));
+    add_(data, size, nullptr, std::move(handler));
+    return result.get();
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::string>::type
+node::add(const uint8_t* data, size_t size, Cancel& cancel, Token&& token)
+{
+    Handler<Token, std::string> handler(std::forward<Token>(token));
+    Result<Token, std::string> result(handler);
+    add_(data, size, &cancel, std::move(handler));
     return result.get();
 }
 
@@ -178,6 +211,21 @@ node::add(const std::string& data, Token&& token)
     Result<Token, std::string> result(handler);
     add_( reinterpret_cast<const uint8_t*>(data.c_str())
         , data.size()
+        , nullptr
+        , std::move(handler));
+    return result.get();
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::string>::type
+node::add(const std::string& data, Cancel& cancel, Token&& token)
+{
+    Handler<Token, std::string> handler(std::forward<Token>(token));
+    Result<Token, std::string> result(handler);
+    add_( reinterpret_cast<const uint8_t*>(data.c_str())
+        , data.size()
+        , &cancel
         , std::move(handler));
     return result.get();
 }
@@ -277,7 +325,7 @@ node::unpin(const std::string& cid, Token&& token)
 {
     Handler<Token> handler(std::forward<Token>(token));
     Result<Token> result(handler);
-    pin_(cid, nullptr, std::move(handler));
+    unpin_(cid, nullptr, std::move(handler));
     return result.get();
 }
 
