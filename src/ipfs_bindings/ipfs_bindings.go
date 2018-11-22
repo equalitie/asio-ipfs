@@ -59,18 +59,12 @@ const (
 	// This next option makes IPNS resolution much faster:
 	//
 	// https://blog.ipfs.io/34-go-ipfs-0.4.14#ipns-improvements
-	//
-	// But:
-	//
-	// 1. It's an experimental feature which may result in inefficient message
-	//    flooding when many users are participating. Thus it's disabled by
-	//    default. Use only for debugging (if at all).
-	//
-	// 2. It doesn't help with the first publish and first resolve, though
-	//    it seems that once the publisher and resolver found their places
-	//    in the DHT, the two operations become almost instant.
+	// https://github.com/ipfs/go-ipfs/blob/master/docs/experimental-features.md#ipns-pubsub
 
 	enablePubSubIPNS = true
+
+	// https://github.com/ipfs/go-ipfs/blob/master/docs/experimental-features.md#quic
+	enableQuic = true
 )
 
 func main() {
@@ -116,6 +110,11 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 		// same PC.
 		for i, addr := range conf.Addresses.Swarm {
 			conf.Addresses.Swarm[i] = setRandomPort(addr)
+		}
+
+		if (enableQuic) {
+			conf.Experimental.QUIC = true
+			conf.Addresses.Swarm = append(conf.Addresses.Swarm, "/ip4/0.0.0.0/udp/0/quic")
 		}
 
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
