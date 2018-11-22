@@ -20,11 +20,12 @@ import (
 	coreiface "github.com/ipfs/go-ipfs/core/coreapi/interface"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
-	config "github.com/ipfs/go-ipfs/repo/config"
-	path "github.com/ipfs/go-ipfs/path"
 	"github.com/ipfs/go-ipfs/core/coreunix"
 
-	peer "gx/ipfs/QmdVrMn1LhB4ybb8hMVaMLXnA8XRSewMnK6YqXKXoTcRvN/go-libp2p-peer"
+
+	"gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
+	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
+	peer "gx/ipfs/QmTRhk7cgjUf2gfQ3p2M9KPECNZEW9XUrmHcFCgog4cPgB/go-libp2p-peer"
 )
 
 // #cgo CFLAGS: -DIN_GO=1 -ggdb -I ${SRCDIR}/../../include
@@ -57,18 +58,12 @@ const (
 	// This next option makes IPNS resolution much faster:
 	//
 	// https://blog.ipfs.io/34-go-ipfs-0.4.14#ipns-improvements
-	//
-	// But:
-	//
-	// 1. It's an experimental feature which may result in inefficient message
-	//    flooding when many users are participating. Thus it's disabled by
-	//    default. Use only for debugging (if at all).
-	//
-	// 2. It doesn't help with the first publish and first resolve, though
-	//    it seems that once the publisher and resolver found their places
-	//    in the DHT, the two operations become almost instant.
+	// https://github.com/ipfs/go-ipfs/blob/master/docs/experimental-features.md#ipns-pubsub
 
 	enablePubSubIPNS = true
+
+	// https://github.com/ipfs/go-ipfs/blob/master/docs/experimental-features.md#quic
+	enableQuic = true
 )
 
 func main() {
@@ -114,6 +109,11 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 		// same PC.
 		for i, addr := range conf.Addresses.Swarm {
 			conf.Addresses.Swarm[i] = setRandomPort(addr)
+		}
+
+		if (enableQuic) {
+			conf.Experimental.QUIC = true
+			conf.Addresses.Swarm = append(conf.Addresses.Swarm, "/ip4/0.0.0.0/udp/0/quic")
 		}
 
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
@@ -400,7 +400,15 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 			defer fmt.Println("go_asio_ipfs_cat end");
 		}
 
-		reader, err := coreunix.Cat(cancel_ctx, n.node, cid)
+		path, err := coreiface.ParsePath(cid);
+
+		if err != nil {
+			fmt.Printf("go_asio_ipfs_cat failed to parse cid %q\n", err);
+			C.execute_data_cb(fn, C.IPFS_CAT_FAILED, nil, C.size_t(0), fn_arg)
+			return
+		}
+
+		reader, err := n.api.Unixfs().Get(cancel_ctx, path)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_cat failed to Cat %q\n", err);

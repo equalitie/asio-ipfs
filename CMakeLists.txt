@@ -68,7 +68,7 @@ endif()
 
 ################################################################################
 externalproject_add(golang
-    URL https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz
+    URL https://dl.google.com/go/go1.11.2.linux-amd64.tar.gz
     BUILD_COMMAND ""
     UPDATE_COMMAND ""
     CONFIGURE_COMMAND ""
@@ -84,8 +84,9 @@ set(IPFS_V0_4_14 "5db38464bfea73e94cb96e011cf93051fe691e65")
 set(IPFS_V0_4_15 "7853e53860805e08a212d78c4baa5d59bff99ba8")
 set(IPFS_V0_4_16 "92ac43afef339e3c3090777db27959e4492a173e")
 set(IPFS_V0_4_17 "dfd19c470e162ef906382683fd743a8571cede95")
+set(IPFS_V0_4_18 "aefc746f34e5ffdee5fba1915c6603b65a0ebf81")
 
-set(IPFS_GO_COMMIT ${IPFS_V0_4_17})
+set(IPFS_GO_COMMIT ${IPFS_V0_4_18})
 
 externalproject_add(go-ipfs
     DOWNLOAD_COMMAND mkdir -p ${GOPATH}
