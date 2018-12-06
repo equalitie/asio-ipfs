@@ -88,6 +88,8 @@ set(IPFS_V0_4_18 "aefc746f34e5ffdee5fba1915c6603b65a0ebf81")
 
 set(IPFS_GO_COMMIT ${IPFS_V0_4_18})
 
+set(PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-Add-code-to-choke-dht-upload-speed.patch")
+
 externalproject_add(go-ipfs
     DOWNLOAD_COMMAND mkdir -p ${GOPATH}
         # If the go-ipfs repo is already downloaded but cmake decides it needs
@@ -112,6 +114,11 @@ externalproject_add(go-ipfs
                && export PATH=${GOROOT}/bin:$ENV{PATH}
                && cd ${GOPATH}/src/github.com/ipfs/go-ipfs
                && $(MAKE) deps
+          # HACK: Because it's extremely complex to make a forked release of
+          # IPFS, we patch the dht_net.go file in the go-libp2p-kad-dht
+          # library. It throttles the DHT upload speed.
+          COMMAND cd ${GOPATH}/src/gx/ipfs/QmQHnqaNULV8WeUGgh97o9K3KAW6kWQmDyNf9UuikgnPTe/go-libp2p-kad-dht
+               && patch -R -s -f --dry-run < ${PATCH} || patch -b < ${PATCH}
     INSTALL_COMMAND ""
     PREFIX "ipfs")
 

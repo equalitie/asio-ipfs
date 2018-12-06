@@ -1,0 +1,112 @@
+From 5d09162fc527ff8b76f270fd66bc1d60edaa82ee Mon Sep 17 00:00:00 2001
+From: Peter Jankuliak <p.jankuliak@gmail.com>
+Date: Wed, 5 Dec 2018 13:30:21 +0100
+Subject: [PATCH] Add code to choke dht upload speed
+
+---
+ dht_net.go | 82 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 81 insertions(+), 1 deletion(-)
+
+diff --git a/dht_net.go b/dht_net.go
+index 03a7cfc..78da344 100644
+--- a/dht_net.go
++++ b/dht_net.go
+@@ -23,6 +23,82 @@ type bufferedWriteCloser interface {
+ 	Flush() error
+ }
+ 
++//---------------------------------------------------
++type RateCounter struct {
++	checkPoint *time.Time
++	writeSize float64 // Since checkPoint
++	maxSpeed float64 // Bytes per second
++	mut  sync.Mutex
++}
++
++func NewRateCounter() *RateCounter {
++	return &RateCounter {
++		nil,
++		0,
++		512, // maxSpeed; TODO: Make configurable
++		sync.Mutex{},
++	}
++}
++
++//---------------------------------------------------
++type ChokingWriter struct {
++	io.Writer
++	rc *RateCounter
++}
++
++//func speedString(speed float64) string {
++//	if speed < 1000 { return fmt.Sprintf("%fB/s", speed) }
++//	if speed < 1000000 { return fmt.Sprintf("%fKiB/s", speed / 1000) }
++//	return fmt.Sprintf("%fMiB/s", speed / 1000000)
++//}
++
++func (w *ChokingWriter) Write(p []byte) (int, error) {
++	n,e := w.Writer.Write(p)
++
++	if e != nil { return n, e }
++
++	w.rc.mut.Lock()
++	defer w.rc.mut.Unlock()
++
++	now := time.Now();
++
++	if w.rc.checkPoint == nil {
++		w.rc.checkPoint = &now
++		w.rc.writeSize = float64(n)
++		return n, e
++	}
++
++	interval := 1 * time.Second;
++
++	if d := now.Sub(*w.rc.checkPoint); d > interval {
++		r := interval.Seconds() / d.Seconds()
++		newCheckPoint := now.Add(-1*interval)
++		w.rc.checkPoint = &newCheckPoint
++		w.rc.writeSize = float64(w.rc.writeSize) * r
++	}
++
++	speed := w.rc.writeSize / now.Sub(*w.rc.checkPoint).Seconds();
++
++	if speed > w.rc.maxSpeed {
++		diff := speed - w.rc.maxSpeed
++		sleep := diff/speed + float64(n)/w.rc.maxSpeed
++		time.Sleep(time.Duration(1000*sleep) * time.Millisecond)
++	}
++
++	w.rc.writeSize += float64(n);
++
++	return n, e
++}
++
++func NewChokingWriter(w io.Writer, rc *RateCounter) *ChokingWriter {
++	return &ChokingWriter {
++		Writer: w,
++		rc: rc,
++	}
++}
++
++//---------------------------------------------------
++
+ // The Protobuf writer performs multiple small writes when writing a message.
+ // We need to buffer those writes, to make sure that we're not sending a new
+ // packet for every single write.
+@@ -31,7 +107,11 @@ type bufferedDelimitedWriter struct {
+ 	ggio.WriteCloser
+ }
+ 
+-func newBufferedDelimitedWriter(str io.Writer) bufferedWriteCloser {
++// TODO: This shouldn't be a global var
++var g_cc = NewRateCounter()
++
++func newBufferedDelimitedWriter(str_ io.Writer) bufferedWriteCloser {
++	str := NewChokingWriter(str_, g_cc)
+ 	w := bufio.NewWriter(str)
+ 	return &bufferedDelimitedWriter{
+ 		Writer:      w,
+-- 
+2.7.4
+
