@@ -65,11 +65,13 @@ struct Handle : public HandleBase {
             unlink();
             if (cancel_signal_id) {
                 go_asio_ipfs_cancel(ipfs_handle, *cancel_signal_id);
+                cancel_signal_id = boost::none;
             }
-            auto callback = std::move(cb);
-            tuple<sys::error_code, As...> args;
-            std::get<0>(args) = asio::error::operation_aborted;
-            std::experimental::apply(callback, std::move(args));
+            ios.post([this, callback = std::move(cb)] {
+                tuple<sys::error_code, As...> args;
+                std::get<0>(args) = asio::error::operation_aborted;
+                std::experimental::apply(callback, std::move(args));
+            });
         };
 
         /*
@@ -87,8 +89,8 @@ struct Handle : public HandleBase {
             self,
             full_args = make_tuple(make_error_code(error::ipfs_error{err}), std::move(args)...)
         ] {
-            std::experimental::apply(self->cb, tuple<sys::error_code, As...>(std::move(full_args)));
-            delete self;
+            std::unique_ptr<Handle> self_(self);
+            std::experimental::apply(self_->cb, tuple<sys::error_code, As...>(std::move(full_args)));
         });
     }
 
@@ -172,7 +174,7 @@ void node::build_( asio::io_service& ios
 {
     /*
      * This cannot be a unique_ptr, because std::function wants to be
-     * CopyConstructible for no good reason.
+     * CopyConstructible for some reason.
      */
     auto impl = new node_impl(ios);
     impl->ipfs_handle = go_asio_ipfs_allocate();
@@ -268,6 +270,10 @@ node::~node()
         while (!_impl->handles.empty()) {
             auto& e = _impl->handles.front();
             e.cancel();
+            /*
+             * The handle will unlink itself in cancel(),
+             * so there is no need to pop_front().
+             */
         }
 
         go_asio_ipfs_free(_impl->ipfs_handle);
