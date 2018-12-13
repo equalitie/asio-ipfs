@@ -99,20 +99,18 @@ struct Handle : public HandleBase {
     }
 };
 
-template<class... As> struct callback_function { static constexpr void* callback = nullptr; };
+template<class... As> struct callback_function;
 
 template<> struct callback_function<> {
-    static void call(int err, void* arg) {
+    static void callback(int err, void* arg) {
         Handle<>::call(err, arg);
     }
-    static constexpr void* callback = (void*)call;
 };
 
 template<> struct callback_function<std::string> {
-    static void call(int err, const char* data, size_t size, void* arg) {
+    static void callback(int err, const char* data, size_t size, void* arg) {
         Handle<std::string>::call(err, arg, std::string(data, data + size));
     }
-    static constexpr void* callback = (void*)call;
 };
 
 template<class... CbAs, class F, class... As>
@@ -129,7 +127,7 @@ void call_ipfs(
         node->ipfs_handle,
         cancel_signal_id,
         args...,
-        (void*) callback_function<CbAs...>::callback,
+        (void*) &callback_function<CbAs...>::callback,
         (void*) (new Handle<CbAs...>{ node, cancel_signal_id, cancel, std::move(callback) })
     );
 }
@@ -145,7 +143,7 @@ void call_ipfs_nocancel(
     ipfs_function(
         node->ipfs_handle,
         args...,
-        (void*) callback_function<CbAs...>::callback,
+        (void*) &callback_function<CbAs...>::callback,
         (void*) (new Handle<CbAs...>{ node, boost::none, cancel, std::move(callback) })
     );
 }
