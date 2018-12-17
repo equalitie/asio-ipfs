@@ -54,7 +54,7 @@ struct Handle : public HandleBase {
         impl->handles.push_back(*this);
 
         cb = [this, cb_ = std::move(cb_)] (sys::error_code ec, As... args) {
-            (*cancel_fn) = nullptr;
+            (*cancel_fn) = []{};
             if (cancel_signal_id) {
                 go_asio_ipfs_cancellation_free(ipfs_handle, *cancel_signal_id);
             }
@@ -65,13 +65,13 @@ struct Handle : public HandleBase {
             unlink();
             if (cancel_signal_id) {
                 go_asio_ipfs_cancel(ipfs_handle, *cancel_signal_id);
-                cancel_signal_id = boost::none;
             }
             ios.post([this, callback = std::move(cb)] {
                 tuple<sys::error_code, As...> args;
                 std::get<0>(args) = asio::error::operation_aborted;
                 std::experimental::apply(callback, std::move(args));
             });
+            (*cancel_fn) = []{};
         };
 
         /*
@@ -81,7 +81,7 @@ struct Handle : public HandleBase {
 
     /*
      * This function is always called, in a go thread. If the Handle was
-     * cancelled, self->cb is a noop.
+     * cancelled, self->cb is empty.
      */
     static void call(int err, void* arg, As... args) {
         auto self = reinterpret_cast<Handle*>(arg);
@@ -90,7 +90,9 @@ struct Handle : public HandleBase {
             full_args = make_tuple(make_error_code(error::ipfs_error{err}), std::move(args)...)
         ] {
             std::unique_ptr<Handle> self_(self);
-            std::experimental::apply(self_->cb, tuple<sys::error_code, As...>(std::move(full_args)));
+            if (self_->cb) {
+                std::experimental::apply(self_->cb, tuple<sys::error_code, As...>(std::move(full_args)));
+            }
         });
     }
 
