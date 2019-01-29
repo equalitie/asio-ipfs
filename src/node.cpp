@@ -58,6 +58,11 @@ struct Handle : public HandleBase {
             if (cancel_signal_id) {
                 go_asio_ipfs_cancellation_free(ipfs_handle, *cancel_signal_id);
             }
+            // We need to unlink here, othersize the callback could invoke the
+            // destructor, which would in turn call `cancel` and expect that it
+            // gets unlinked. But we just set the `cancel_fn` to do nothing
+            // above, so the destructor ends up in an infinite loop.
+            unlink();
             std::experimental::apply(cb_, make_tuple(ec, std::move(args)...));
         };
 
