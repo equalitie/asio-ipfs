@@ -67,16 +67,18 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
 endif()
 
 ################################################################################
-externalproject_add(golang
-    URL https://dl.google.com/go/go1.11.2.linux-amd64.tar.gz
-    BUILD_COMMAND ""
-    UPDATE_COMMAND ""
-    CONFIGURE_COMMAND ""
-    INSTALL_COMMAND ""
-    PREFIX golang)
 
-set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang/src/golang")
-set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/gopath")
+if(NOT TARGET golang)
+    set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang")
+    externalproject_add(golang
+        URL https://dl.google.com/go/go1.11.2.linux-amd64.tar.gz
+        URL_MD5 5630231012b6d02b821af51f04c2776c
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+        SOURCE_DIR ${GOROOT}
+    )
+endif()
 
 ################################################################################
 # IPFS releases
@@ -88,6 +90,7 @@ set(IPFS_V0_4_18 "aefc746f34e5ffdee5fba1915c6603b65a0ebf81")
 
 set(IPFS_GO_COMMIT ${IPFS_V0_4_18})
 
+set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/gopath")
 set(PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-Throttle.patch")
 
 externalproject_add(go-ipfs
