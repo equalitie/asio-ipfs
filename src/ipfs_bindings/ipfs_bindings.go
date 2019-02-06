@@ -447,7 +447,7 @@ func go_asio_ipfs_pin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 		path, err := coreiface.ParsePath(cid)
 
 		if err != nil {
-			fmt.Printf("go_asio_ipfs_pin failed to unpin %q %q\n", cid, err)
+			fmt.Printf("go_asio_ipfs_pin failed to pin %q %q\n", cid, err)
 			C.execute_void_cb(fn, C.IPFS_PIN_FAILED, fn_arg)
 			return
 		}
@@ -455,7 +455,7 @@ func go_asio_ipfs_pin(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 		err = n.api.Pin().Add(cancel_ctx, path)
 
 		if err != nil {
-			fmt.Printf("go_asio_ipfs_pin failed to unpin %q %q\n", cid, err)
+			fmt.Printf("go_asio_ipfs_pin failed to pin %q %q\n", cid, err)
 			C.execute_void_cb(fn, C.IPFS_PIN_FAILED, fn_arg)
 			return
 		}
