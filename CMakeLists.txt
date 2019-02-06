@@ -58,13 +58,13 @@ add_definitions(-DBOOST_COROUTINE_NO_DEPRECATION_WARNING
 #               from main(?).
 #set(SANITIZE "-fsanitize=address")
 ################################################################################
-set(BINDING_DIR "${CMAKE_CURRENT_BINARY_DIR}/ipfs_bindings")
 
 # Android does not support POSIX file:
 # <https://github.com/boostorg/beast/issues/800>.
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_BEAST_NO_POSIX_FILE=0")
 endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITIZE}")
 
 ################################################################################
 
@@ -81,53 +81,23 @@ if(NOT TARGET golang)
 endif()
 
 ################################################################################
-# IPFS releases
-set(IPFS_V0_4_14 "5db38464bfea73e94cb96e011cf93051fe691e65")
-set(IPFS_V0_4_15 "7853e53860805e08a212d78c4baa5d59bff99ba8")
-set(IPFS_V0_4_16 "92ac43afef339e3c3090777db27959e4492a173e")
-set(IPFS_V0_4_17 "dfd19c470e162ef906382683fd743a8571cede95")
-set(IPFS_V0_4_18 "aefc746f34e5ffdee5fba1915c6603b65a0ebf81")
 
-set(IPFS_GO_COMMIT ${IPFS_V0_4_18})
-
-set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/gopath")
 set(PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-Throttle.patch")
+set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go-workspace")
 
 externalproject_add(go-ipfs
-    DOWNLOAD_COMMAND mkdir -p ${GOPATH}
-        # If the go-ipfs repo is already downloaded but cmake decides it needs
-        # to be re-downloaded, then we must checkout the master branch or the
-        # `go get` command (executed later) won't work.  We then switch back to
-        # a particular commit after doing the `go get`.
-        COMMAND test -d ${GOPATH}/src/github.com/ipfs/go-ipfs
-             && cd ${GOPATH}/src/github.com/ipfs/go-ipfs
-             && git checkout master
-             || true
-        COMMAND export GOPATH=${GOPATH}
-             && export GOROOT=${GOROOT}
-             && export PATH=${GOROOT}/bin:$ENV{PATH}
-             && go get -u -d github.com/ipfs/go-ipfs
-             && cd ${GOPATH}/src/github.com/ipfs/go-ipfs
-             && git checkout ${IPFS_GO_COMMIT}
-    BUILD_ALWAYS 1
-    DEPENDS golang
+    URL https://dist.ipfs.io/go-ipfs/v0.4.18/go-ipfs-source.tar.gz
+    URL_MD5 4caceca48d44d92801194ba0e58eecd4
+    PATCH_COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs/vendor
+               && patch -p0 -b < ${PATCH}
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND export GOPATH=${GOPATH}
-               && export GOROOT=${GOROOT}
-               && export PATH=${GOROOT}/bin:$ENV{PATH}
-               && cd ${GOPATH}/src/github.com/ipfs/go-ipfs
-               && $(MAKE) deps
-          # HACK: Because it's extremely complex to make a forked release of
-          # IPFS, we patch the dht_net.go file in the go-libp2p-kad-dht
-          # library. It throttles the DHT upload speed.
-          COMMAND cd ${GOPATH}/src/
-               && patch -p0 -R -s -f --dry-run < ${PATCH} || patch -p0 -b < ${PATCH}
+    BUILD_COMMAND mkdir -p ${GOPATH}/src/github.com/ipfs
+               && rsync -r ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs ${GOPATH}/src/github.com/ipfs --exclude=vendor/gx
+               && rsync -r ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs/vendor/gx ${GOPATH}/src
     INSTALL_COMMAND ""
-    PREFIX "ipfs")
+)
 
-################################################################################
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITIZE}")
-
+set(BINDING_DIR "${CMAKE_CURRENT_BINARY_DIR}/ipfs_bindings")
 set(BINDINGS_HEADER  "${BINDING_DIR}/ipfs_bindings.h")
 set(BINDINGS_LIBRARY "${BINDING_DIR}/libipfs_bindings.so")
 set(BINDINGS_OUTPUT ${BINDINGS_HEADER} ${BINDINGS_LIBRARY})
@@ -136,16 +106,16 @@ add_custom_command(
     OUTPUT ${BINDINGS_OUTPUT}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/asio_ipfs/ipfs_error_codes.h
             ${CMAKE_CURRENT_SOURCE_DIR}/src/ipfs_bindings/ipfs_bindings.go
+            golang
             go-ipfs
     COMMAND mkdir -p ${BINDING_DIR}
+         && export PATH=${GOROOT}/bin:$ENV{PATH}
          && export GOPATH=${GOPATH}
-         && export GOROOT=${GOROOT}
          && export GOOS=${GOOS}
          && export GOARCH=${GOARCH}
          && export GOARM=${GOARM}
          && export CGO_ENABLED=1
          && export CC=${CMAKE_C_COMPILER}
-         && export PATH=${GOROOT}/bin:$ENV{PATH}
          && mkdir -p ${GOPATH}/src/github.com/equalitie/asio-ipfs
          && cd ${GOPATH}/src/github.com/equalitie/asio-ipfs
          && rsync -r ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src .
@@ -153,8 +123,8 @@ add_custom_command(
                      --buildmode=c-shared
                      -o ${BINDING_DIR}/ipfs_bindings.so
                      ./src/ipfs_bindings
-         && mv ${BINDING_DIR}/ipfs_bindings.so ${BINDING_DIR}/libipfs_bindings.so)
-
+         && mv ${BINDING_DIR}/ipfs_bindings.so ${BINDING_DIR}/libipfs_bindings.so
+)
 
 add_custom_target(ipfs-bindings-target DEPENDS ${BINDINGS_OUTPUT})
 add_library(ipfs-bindings SHARED IMPORTED GLOBAL)
