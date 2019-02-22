@@ -110,6 +110,7 @@ add_custom_command(
             go-ipfs
     COMMAND mkdir -p ${BINDING_DIR}
          && export PATH=${GOROOT}/bin:$ENV{PATH}
+         && export GOROOT=${GOROOT}
          && export GOPATH=${GOPATH}
          && export GOOS=${GOOS}
          && export GOARCH=${GOARCH}
