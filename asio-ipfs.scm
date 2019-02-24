@@ -1,6 +1,7 @@
 (define-module (asio-ipfs)
   #:use-module (guix licenses)
   #:use-module (guix packages)
+  #:use-module (guix download)
   #:use-module (guix git-download)
   #:use-module (guix gexp)
   #:use-module (guix build-system cmake)
@@ -17,6 +18,14 @@
   #:use-module (gnu packages serialization)
   #:use-module (gnu packages version-control))
 
+;; TODO: reuse (gnu packages ipfs)/go-ipfs src
+(define %go-ipfs-src
+  (origin
+    (method url-fetch)
+    (uri "https://dist.ipfs.io/go-ipfs/v0.4.19/go-ipfs-source.tar.gz")
+    (sha256
+     (base32
+      "0s04ap14p6hnipjm27nm5k8s28zv9k5g9mziyh3ibgwn7dzb1kpx"))))
 (define-public asio-ipfs
   (package
     (name "asio-ipfs")
@@ -33,6 +42,7 @@
     (build-system cmake-build-system)
     (inputs
      `(("go" , go)
+       ("go-ipfs-src" , %go-ipfs-src)
        ("nss-certs" , nss-certs)
        ("gcc-toolchain" , gcc-toolchain)
        ("rsync" , rsync)
