@@ -68,17 +68,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITI
 
 ################################################################################
 
-if(NOT TARGET golang)
-    set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang")
-    externalproject_add(golang
-        URL https://dl.google.com/go/go1.11.2.linux-amd64.tar.gz
-        URL_MD5 5630231012b6d02b821af51f04c2776c
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-        SOURCE_DIR ${GOROOT}
-    )
-endif()
+set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang")
 
 ################################################################################
 
@@ -106,11 +96,9 @@ add_custom_command(
     OUTPUT ${BINDINGS_OUTPUT}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/asio_ipfs/ipfs_error_codes.h
             ${CMAKE_CURRENT_SOURCE_DIR}/src/ipfs_bindings/ipfs_bindings.go
-            golang
             go-ipfs
     COMMAND mkdir -p ${BINDING_DIR}
-         && export PATH=${GOROOT}/bin:$ENV{PATH}
-         && export GOROOT=${GOROOT}
+         && export IPFS_GX_USE_GLOBAL=1
          && export GOPATH=${GOPATH}
          && export GOOS=${GOOS}
          && export GOARCH=${GOARCH}
