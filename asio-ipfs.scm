@@ -40,6 +40,8 @@
         (sha256
           (base32 "0b3qczz55yk27xd51zhfg0fr8v90i40ga7ph5fzkpd9fmadya65s"))))
     (build-system cmake-build-system)
+    (arguments
+     '(#:tests? #f)) ; no tests
     (inputs
      `(("go" , go)
        ("go-ipfs-src" , %go-ipfs-src)
