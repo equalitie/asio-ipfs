@@ -162,3 +162,6 @@ target_link_libraries(ipfs-example asio-ipfs ipfs-bindings ${Boost_LIBRARIES})
 ################################################################################
 endif() # ASIO_IPFS_WITH_EXAMPLE_BINARIES
 ################################################################################
+install(TARGETS asio-ipfs EXPORT asio-ipfs
+        ARCHIVE DESTINATION lib COMPONENT Libraries)
+################################################################################
