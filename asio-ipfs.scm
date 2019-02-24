@@ -35,10 +35,10 @@
         (method git-fetch)
         (uri (git-reference
           (url "https://github.com/equalitie/asio-ipfs.git")
-          (commit "23641d2e6117fbe599ff151b16532b9a0ad5c36f")))
+          (commit "aa6cc9f737593331199ce4b28921f8db938b26f0")))
         (file-name (git-file-name name version))
         (sha256
-          (base32 "0b3qczz55yk27xd51zhfg0fr8v90i40ga7ph5fzkpd9fmadya65s"))))
+          (base32 "0y9mk7lqmm8rz7c5cigvcq8m3i9ib2xkws7zq5vh08amkflbrjli"))))
     (build-system cmake-build-system)
     (arguments
      '(#:tests? #f)) ; no tests
