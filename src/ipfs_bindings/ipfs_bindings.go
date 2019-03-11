@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"context"
 	"os"
-	"bytes"
 	"sort"
 	"unsafe"
 	"time"
@@ -17,15 +16,16 @@ import (
 	"io/ioutil"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
-	coreiface "github.com/ipfs/go-ipfs/core/coreapi/interface"
+	coreiface "gx/ipfs/QmXLwxifxwfc2bAwq6rdjbYqAsGzWsDE9RM5TWMGtykyj6/interface-go-ipfs-core"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
-	"github.com/ipfs/go-ipfs/core/coreunix"
 
 
-	"gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
-	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
-	peer "gx/ipfs/QmTRhk7cgjUf2gfQ3p2M9KPECNZEW9XUrmHcFCgog4cPgB/go-libp2p-peer"
+	"gx/ipfs/QmUAuYuiafnJRZxDDX7MuruMNsicYNuyub5vUeAcupUBNs/go-ipfs-config"
+
+	path "gx/ipfs/QmQAgv6Gaoe2tQpcabqwKXKChp2MZ7i3UXv9DqTTaxCaTR/go-path"
+	peer "gx/ipfs/QmYVXrKrKHDC9FobgmcmshCDyWwdrfwfanNQN4oxJ9Fk3h/go-libp2p-peer"
+	files "gx/ipfs/QmQmhotPUzVrMEWNK3x1R5jQ5ZHWyL7tVUrmRPjrBrvyCb/go-ipfs-files"
 )
 
 // #cgo CFLAGS: -DIN_GO=1 -ggdb -I ${SRCDIR}/../../include
@@ -169,7 +169,7 @@ func go_asio_ipfs_allocate() uint64 {
 	ret := g_next_node_id
 	g_nodes[g_next_node_id] = &n
 	g_next_node_id += 1
-	
+
 	return ret
 }
 
@@ -237,7 +237,14 @@ func start_node(n *Node, repoRoot string) C.int {
 
 	printSwarmAddrs(n.node)
 
-	n.api = coreapi.NewCoreAPI(n.node)
+	api, err := coreapi.NewCoreAPI(n.node)
+
+	if err != nil {
+		fmt.Println("err", err);
+		return C.IPFS_FAILED_TO_CREATE_REPO
+	}
+
+	n.api = api
 
 	return C.IPFS_SUCCESS
 }
@@ -371,7 +378,7 @@ func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsa
 			defer fmt.Println("go_asio_ipfs_add end");
 		}
 
-		cid, err := coreunix.Add(n.node, bytes.NewReader(msg))
+		p, err := n.api.Unixfs().Add(n.node.Context(), files.NewBytesFile(msg))
 
 		if err != nil {
 			fmt.Println("Error: failed to insert content ", err)
@@ -379,10 +386,19 @@ func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsa
 			return;
 		}
 
-		cdata := C.CBytes([]byte(cid))
+		cid := p.Root()
+
+		if err != nil {
+			fmt.Println("Error: failed to parse IPFS path ", err)
+			C.execute_data_cb(fn, C.IPFS_ADD_FAILED, nil, C.size_t(0), fn_arg)
+			return;
+		}
+
+		cidstr := cid.String()
+		cdata := C.CBytes([]byte(cidstr))
 		defer C.free(cdata)
 
-		C.execute_data_cb(fn, C.IPFS_SUCCESS, cdata, C.size_t(len(cid)), fn_arg)
+		C.execute_data_cb(fn, C.IPFS_SUCCESS, cdata, C.size_t(len(cidstr)), fn_arg)
 	}()
 }
 
@@ -408,7 +424,7 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 			return
 		}
 
-		reader, err := n.api.Unixfs().Get(cancel_ctx, path)
+		f, err := n.api.Unixfs().Get(cancel_ctx, path)
 
 		if err != nil {
 			fmt.Printf("go_asio_ipfs_cat failed to Cat %q\n", err);
@@ -416,7 +432,24 @@ func go_asio_ipfs_cat(handle uint64, cancel_signal C.uint64_t, c_cid *C.char, fn
 			return
 		}
 
-		bytes, err := ioutil.ReadAll(reader)
+		var file files.File
+
+		switch f := f.(type) {
+		case files.File:
+			file = f
+		case files.Directory:
+			fmt.Printf("go_asio_ipfs_cat path corresponds to a directory\n");
+			C.execute_data_cb(fn, C.IPFS_CAT_FAILED, nil, C.size_t(0), fn_arg)
+			return
+		default:
+			fmt.Printf("go_asio_ipfs_cat unsupported type\n");
+			C.execute_data_cb(fn, C.IPFS_CAT_FAILED, nil, C.size_t(0), fn_arg)
+			return
+		}
+
+		var r io.Reader = file
+		bytes, err := ioutil.ReadAll(r)
+
 		if err != nil {
 			fmt.Println("go_asio_ipfs_cat failed to read");
 			C.execute_data_cb(fn, C.IPFS_READ_FAILED, nil, C.size_t(0), fn_arg)
