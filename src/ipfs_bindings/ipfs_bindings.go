@@ -19,6 +19,9 @@ import (
 	coreiface "gx/ipfs/QmXLwxifxwfc2bAwq6rdjbYqAsGzWsDE9RM5TWMGtykyj6/interface-go-ipfs-core"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	plugin "github.com/ipfs/go-ipfs/plugin"
+	flatfs "github.com/ipfs/go-ipfs/plugin/plugins/flatfs"
+	levelds "github.com/ipfs/go-ipfs/plugin/plugins/levelds"
 
 
 	"gx/ipfs/QmUAuYuiafnJRZxDDX7MuruMNsicYNuyub5vUeAcupUBNs/go-ipfs-config"
@@ -215,8 +218,31 @@ func go_asio_ipfs_cancel(handle uint64, cancel_signal C.uint64_t) {
 	cancel()
 }
 
+func loadPlugins(plugins []plugin.Plugin) bool {
+	for _, pl := range plugins {
+		if pl, ok := pl.(plugin.PluginDatastore); ok {
+			err := fsrepo.AddDatastoreConfigHandler(pl.DatastoreTypeName(), pl.DatastoreConfigParser());
+			if err != nil {
+				return false
+			}
+		} else {
+			panic("Attempted to load an unsupported plugin type")
+		}
+	}
+
+	return true
+}
 
 func start_node(n *Node, repoRoot string) C.int {
+
+	pr1 := loadPlugins(flatfs.Plugins);
+	pr2 := loadPlugins(levelds.Plugins);
+
+	if !pr1 || !pr2 {
+		fmt.Println("Failed to load plugins")
+		return C.IPFS_FAILED_TO_CREATE_REPO
+	}
+
 	r, err := openOrCreateRepo(repoRoot);
 
 	if err != nil {
