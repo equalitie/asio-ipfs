@@ -86,10 +86,10 @@ set(PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-Throttle.patch")
 set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go-workspace")
 
 externalproject_add(go-ipfs
-    URL https://dist.ipfs.io/go-ipfs/v0.4.18/go-ipfs-source.tar.gz
-    URL_MD5 4caceca48d44d92801194ba0e58eecd4
-    PATCH_COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs/vendor
-               && patch -p0 -b < ${PATCH}
+    URL https://dist.ipfs.io/go-ipfs/v0.4.19/go-ipfs-source.tar.gz
+    URL_HASH SHA512=89d32fc560683b5bd4f67ae22859d57865ec364e28f065e81bd2618412dccbcc9c5a395f5f297b3ce4c9f6112560ea209e4b2a794c9b0d759b2980569b7ccf82
+    #PATCH_COMMAND cd ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs/vendor
+    #           && patch -p0 -b < ${PATCH}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND mkdir -p ${GOPATH}/src/github.com/ipfs
                && rsync -r ${CMAKE_CURRENT_BINARY_DIR}/go-ipfs-prefix/src/go-ipfs ${GOPATH}/src/github.com/ipfs --exclude=vendor/gx
