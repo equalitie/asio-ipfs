@@ -233,7 +233,16 @@ void node::add_( const uint8_t* data
                , Cancel* cancel
                , function<void(sys::error_code, string)> cb)
 {
-    call_ipfs_nocancel(_impl.get(), cancel, cb, go_asio_ipfs_add, (void*) data, size);
+    call_ipfs_nocancel(_impl.get(), cancel, cb, go_asio_ipfs_add, (void*) data, size, false);
+}
+
+void node::calculate_cid_( const string_view data
+                         , Cancel* cancel
+                         , function<void(sys::error_code, string)> cb)
+{
+    const char* d = data.data();
+    size_t s = data.size();
+    call_ipfs_nocancel(_impl.get(), cancel, cb, go_asio_ipfs_add, (void*) d, s, true);
 }
 
 void node::cat_( const string& cid

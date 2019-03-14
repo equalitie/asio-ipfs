@@ -25,6 +25,7 @@ import (
 
 
 	"gx/ipfs/QmUAuYuiafnJRZxDDX7MuruMNsicYNuyub5vUeAcupUBNs/go-ipfs-config"
+	"gx/ipfs/QmXLwxifxwfc2bAwq6rdjbYqAsGzWsDE9RM5TWMGtykyj6/interface-go-ipfs-core/options"
 
 	path "gx/ipfs/QmQAgv6Gaoe2tQpcabqwKXKChp2MZ7i3UXv9DqTTaxCaTR/go-path"
 	peer "gx/ipfs/QmYVXrKrKHDC9FobgmcmshCDyWwdrfwfanNQN4oxJ9Fk3h/go-libp2p-peer"
@@ -393,7 +394,7 @@ func go_asio_ipfs_publish(handle uint64, cancel_signal C.uint64_t, cid *C.char, 
 }
 
 //export go_asio_ipfs_add
-func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, only_hash bool, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	msg := C.GoBytes(data, C.int(size))
@@ -404,7 +405,7 @@ func go_asio_ipfs_add(handle uint64, data unsafe.Pointer, size C.size_t, fn unsa
 			defer fmt.Println("go_asio_ipfs_add end");
 		}
 
-		p, err := n.api.Unixfs().Add(n.node.Context(), files.NewBytesFile(msg))
+		p, err := n.api.Unixfs().Add(n.node.Context(), files.NewBytesFile(msg), options.Unixfs.HashOnly(only_hash))
 
 		if err != nil {
 			fmt.Println("Error: failed to insert content ", err)

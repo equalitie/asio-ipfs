@@ -5,6 +5,7 @@
 #include <memory>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/utility/string_view.hpp>
 
 namespace asio_ipfs {
 
@@ -22,6 +23,8 @@ class node {
 
     template<class Token, class... Ret>
     using Result = typename boost::asio::async_result<Handler<Token, Ret...>>;
+
+    using string_view = boost::string_view;
 
 public:
     static const uint32_t CID_SIZE = 46;
@@ -66,6 +69,10 @@ public:
     template<class Token>
     typename Result<Token, std::string>::type
     add(const std::string&, Cancel&, Token&&); // Convenience function.
+
+    template<class Token>
+    typename Result<Token, std::string>::type
+    calculate_cid(const string_view, Cancel&, Token&&);
 
     template<class Token>
     typename Result<Token, std::string>::type
@@ -125,6 +132,10 @@ private:
     void add_( const uint8_t* data, size_t size
              , Cancel*
              , std::function<void(boost::system::error_code, std::string)>);
+
+    void calculate_cid_( const string_view
+                       , Cancel*
+                       , std::function<void(boost::system::error_code, std::string)>);
 
     void cat_( const std::string& cid
              , Cancel*
@@ -227,6 +238,17 @@ node::add(const std::string& data, Cancel& cancel, Token&& token)
         , data.size()
         , &cancel
         , std::move(handler));
+    return result.get();
+}
+
+template<class Token>
+inline
+typename node::Result<Token, std::string>::type
+node::calculate_cid(const string_view data, Cancel& cancel, Token&& token)
+{
+    Handler<Token, std::string> handler(std::forward<Token>(token));
+    Result<Token, std::string> result(handler);
+    calculate_cid_(data, &cancel, std::move(handler));
     return result.get();
 }
 
