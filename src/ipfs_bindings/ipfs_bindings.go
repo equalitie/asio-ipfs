@@ -234,7 +234,7 @@ func loadPlugins(plugins []plugin.Plugin) bool {
 	return true
 }
 
-func start_node(n *Node, repoRoot string) C.int {
+func start_node(online bool, n *Node, repoRoot string) C.int {
 
 	pr1 := loadPlugins(flatfs.Plugins);
 	pr2 := loadPlugins(levelds.Plugins);
@@ -252,7 +252,7 @@ func start_node(n *Node, repoRoot string) C.int {
 	}
 
 	n.node, err = core.NewNode(n.ctx, &core.BuildCfg{
-		Online: true,
+		Online: online,
 		Permanent: true,
 		Repo:   r,
 		ExtraOpts: map[string]bool{
@@ -277,22 +277,22 @@ func start_node(n *Node, repoRoot string) C.int {
 }
 
 //export go_asio_ipfs_start_blocking
-func go_asio_ipfs_start_blocking(handle uint64, c_repoPath *C.char) C.int {
+func go_asio_ipfs_start_blocking(handle uint64, online bool, c_repoPath *C.char) C.int {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
 
-	return start_node(n, repoRoot);
+	return start_node(online, n, repoRoot);
 }
 
 //export go_asio_ipfs_start_async
-func go_asio_ipfs_start_async(handle uint64, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_start_async(handle uint64, online bool, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
 
 	go func() {
-		err := start_node(n, repoRoot);
+		err := start_node(online, n, repoRoot);
 
 		C.execute_void_cb(fn, err, fn_arg)
 	}()

@@ -157,10 +157,10 @@ void call_ipfs_nocancel(
 
 
 
-node::node(asio::io_service& ios, const string& repo_path)
+node::node(asio::io_service& ios, bool online, const string& repo_path)
 {
     uint64_t ipfs_handle = go_asio_ipfs_allocate();
-    int ec = go_asio_ipfs_start_blocking(ipfs_handle, (char*) repo_path.data());
+    int ec = go_asio_ipfs_start_blocking(ipfs_handle, online, (char*) repo_path.data());
 
     if (ec != IPFS_SUCCESS) {
         go_asio_ipfs_free(ipfs_handle);
@@ -172,6 +172,7 @@ node::node(asio::io_service& ios, const string& repo_path)
 }
 
 void node::build_( asio::io_service& ios
+                 , bool online
                  , const string& repo_path
                  , Cancel* cancel
                  , function<void( const sys::error_code& ec
@@ -196,7 +197,7 @@ void node::build_( asio::io_service& ios
         }
     };
 
-    call_ipfs_nocancel(impl, cancel, cb_, go_asio_ipfs_start_async, (char*) repo_path.data());
+    call_ipfs_nocancel(impl, cancel, cb_, go_asio_ipfs_start_async, online, (char*) repo_path.data());
 }
 
 node::node() = default;
