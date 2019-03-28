@@ -120,6 +120,9 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 			conf.Addresses.Swarm = append(conf.Addresses.Swarm, "/ip4/0.0.0.0/udp/0/quic")
 		}
 
+		conf.Swarm.ConnMgr.LowWater = 400
+		conf.Swarm.ConnMgr.HighWater = 600
+
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
 			return nil, err
 		}
