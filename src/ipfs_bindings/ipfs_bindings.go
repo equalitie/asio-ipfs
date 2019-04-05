@@ -265,6 +265,8 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 		return C.IPFS_FAILED_TO_CREATE_REPO
 	}
 
+	cfg, err := fsrepo.ConfigAt(repoRoot);
+
 	n.node, err = core.NewNode(n.ctx, &core.BuildCfg{
 		Online: online,
 		Permanent: true,
@@ -287,7 +289,7 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 		return C.IPFS_FAILED_TO_CREATE_REPO
 	}
 
-	err = corehttp.ListenAndServe(n.node, "/ip4/0.0.0.0/tcp/5001", corehttp.MetricsScrapingOption("/debug/metrics/prometheus"))
+	err = corehttp.ListenAndServe(n.node, cfg.Addresses.API[0], corehttp.MetricsScrapingOption("/debug/metrics/prometheus"))
 
 	if err != nil {
 		fmt.Println("err", err);
