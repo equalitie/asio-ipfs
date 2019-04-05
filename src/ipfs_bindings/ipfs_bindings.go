@@ -31,6 +31,9 @@ import (
 	path "gx/ipfs/QmQAgv6Gaoe2tQpcabqwKXKChp2MZ7i3UXv9DqTTaxCaTR/go-path"
 	peer "gx/ipfs/QmYVXrKrKHDC9FobgmcmshCDyWwdrfwfanNQN4oxJ9Fk3h/go-libp2p-peer"
 	files "gx/ipfs/QmQmhotPUzVrMEWNK3x1R5jQ5ZHWyL7tVUrmRPjrBrvyCb/go-ipfs-files"
+
+	mprome "gx/ipfs/QmfHYMtNSntM6qFhHzLDCyqTX7NNpsfwFgvicJv7L5saAP/go-metrics-prometheus"
+	"gx/ipfs/QmTQuFQWHAWy4wMH6ZyPfGiawA5u9T8rs79FENoV8yXaoS/client_golang/prometheus"
 )
 
 // #cgo CFLAGS: -DIN_GO=1 -ggdb -I ${SRCDIR}/../../include
@@ -240,6 +243,13 @@ func loadPlugins(plugins []plugin.Plugin) bool {
 
 func start_node(online bool, n *Node, repoRoot string) C.int {
 
+	err := mprome.Inject()
+
+	if err != nil {
+		fmt.Println("err");
+		return C.IPFS_FAILED_TO_CREATE_REPO // FIXME
+	}
+
 	pr1 := loadPlugins(flatfs.Plugins);
 	pr2 := loadPlugins(levelds.Plugins);
 
@@ -267,6 +277,8 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 	n.node.SetLocal(false)
 
 	printSwarmAddrs(n.node)
+
+	prometheus.MustRegister(&corehttp.IpfsNodeCollector{Node: n.node})
 
 	api, err := coreapi.NewCoreAPI(n.node)
 
