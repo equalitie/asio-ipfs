@@ -17,6 +17,7 @@ import (
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
 	coreiface "gx/ipfs/QmXLwxifxwfc2bAwq6rdjbYqAsGzWsDE9RM5TWMGtykyj6/interface-go-ipfs-core"
+	corehttp "github.com/ipfs/go-ipfs/core/corehttp"
 	repo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	plugin "github.com/ipfs/go-ipfs/plugin"
@@ -272,6 +273,13 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 	if err != nil {
 		fmt.Println("err", err);
 		return C.IPFS_FAILED_TO_CREATE_REPO
+	}
+
+	err = corehttp.ListenAndServe(n.node, "/ip4/0.0.0.0/tcp/5001", corehttp.MetricsScrapingOption("/debug/metrics/prometheus"))
+
+	if err != nil {
+		fmt.Println("err", err);
+		return C.IPFS_FAILED_TO_CREATE_REPO // FIXME
 	}
 
 	n.api = api
