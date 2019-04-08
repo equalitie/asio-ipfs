@@ -289,12 +289,14 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 		return C.IPFS_FAILED_TO_CREATE_REPO
 	}
 
-	err = corehttp.ListenAndServe(n.node, cfg.Addresses.API[0], corehttp.MetricsScrapingOption("/debug/metrics/prometheus"))
+	go func() {
+		apiAddr := cfg.Addresses.API[0]
+		err := corehttp.ListenAndServe(n.node, apiAddr, corehttp.MetricsScrapingOption("/debug/metrics/prometheus"))
 
-	if err != nil {
-		fmt.Println("err", err);
-		return C.IPFS_FAILED_TO_CREATE_REPO // FIXME
-	}
+		if err != nil {
+			fmt.Printf("Warning: failed to start API listener on %s\n", apiAddr);
+		}
+	}()
 
 	n.api = api
 
