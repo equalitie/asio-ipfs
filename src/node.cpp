@@ -13,6 +13,9 @@ namespace asio = boost::asio;
 namespace sys  = boost::system;
 namespace intr = boost::intrusive;
 
+template<class F> struct Defer { F f; ~Defer() { f(); } };
+template<class F> Defer<F> defer(F&& f) { return Defer<F>{forward<F>(f)}; }
+
 struct HandleBase : public intr::list_base_hook
                             <intr::link_mode<intr::auto_unlink>> {
     virtual void cancel() = 0;
@@ -40,6 +43,7 @@ struct Handle : public HandleBase {
     function<void()> destructor_cancel_fn;
     boost::optional<uint64_t> cancel_signal_id;
     asio::io_service::work work;
+    unsigned job_count = 1;
 
     Handle( node_impl* impl
           , boost::optional<uint64_t> cancel_signal_id_
@@ -71,11 +75,19 @@ struct Handle : public HandleBase {
             if (cancel_signal_id) {
                 go_asio_ipfs_cancel(ipfs_handle, *cancel_signal_id);
             }
+
+            assert(cb);
+            assert(job_count);
+            ++job_count;
+
             ios.post([this, callback = std::move(cb)] {
+                auto on_exit = defer([&] { if (!--job_count) delete(this); });
+
                 tuple<sys::error_code, As...> args;
                 std::get<0>(args) = asio::error::operation_aborted;
                 std::experimental::apply(callback, std::move(args));
             });
+
             (*cancel_fn) = []{};
         };
 
@@ -94,9 +106,10 @@ struct Handle : public HandleBase {
             self,
             full_args = make_tuple(make_error_code(error::ipfs_error{err}), std::move(args)...)
         ] {
-            std::unique_ptr<Handle> self_(self);
-            if (self_->cb) {
-                std::experimental::apply(self_->cb, tuple<sys::error_code, As...>(std::move(full_args)));
+            auto on_exit = defer([&] { if (!--self->job_count) delete(self); });
+
+            if (self->cb) {
+                std::experimental::apply(self->cb, tuple<sys::error_code, As...>(std::move(full_args)));
             }
         });
     }
