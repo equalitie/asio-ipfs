@@ -82,7 +82,6 @@ endif()
 
 ################################################################################
 
-set(PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/0001-Throttle.patch")
 set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go-workspace")
 
 externalproject_add(go-ipfs
