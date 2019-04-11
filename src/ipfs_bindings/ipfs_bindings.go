@@ -136,7 +136,7 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 }
 
 func printSwarmAddrs(node *core.IpfsNode) {
-	if !node.OnlineMode() {
+	if !node.IsOnline {
 		fmt.Println("Swarm not listening, running in offline mode.")
 		return
 	}
@@ -276,7 +276,7 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 		},
 	})
 
-	n.node.SetLocal(false)
+	n.node.IsDaemon = true
 
 	printSwarmAddrs(n.node)
 
