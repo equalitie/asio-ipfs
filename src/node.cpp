@@ -259,7 +259,7 @@ void node::calculate_cid_( const string_view data
     call_ipfs_nocancel(_impl.get(), cancel, cb, go_asio_ipfs_add, (void*) d, s, true);
 }
 
-void node::cat_( const string& cid
+void node::cat_( string_view cid
                , Cancel* cancel
                , function<void(sys::error_code, string)> cb)
 {

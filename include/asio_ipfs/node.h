@@ -76,11 +76,11 @@ public:
 
     template<class Token>
     typename Result<Token, std::string>::type
-    cat(const std::string& cid, Token&&);
+    cat(string_view cid, Token&&);
 
     template<class Token>
     typename Result<Token, std::string>::type
-    cat(const std::string& cid, Cancel&, Token&&);
+    cat(string_view cid, Cancel&, Token&&);
 
     template<class Token>
     void
@@ -138,7 +138,7 @@ private:
                        , Cancel*
                        , std::function<void(boost::system::error_code, std::string)>);
 
-    void cat_( const std::string& cid
+    void cat_( string_view cid
              , Cancel*
              , std::function<void(boost::system::error_code, std::string)>);
 
@@ -258,7 +258,7 @@ node::calculate_cid(const string_view data, Cancel& cancel, Token&& token)
 template<class Token>
 inline
 typename node::Result<Token, std::string>::type
-node::cat(const std::string& cid, Token&& token)
+node::cat(string_view cid, Token&& token)
 {
     Handler<Token, std::string> handler(std::forward<Token>(token));
     Result<Token, std::string> result(handler);
@@ -269,7 +269,7 @@ node::cat(const std::string& cid, Token&& token)
 template<class Token>
 inline
 typename node::Result<Token, std::string>::type
-node::cat(const std::string& cid, Cancel& cancel, Token&& token)
+node::cat(string_view cid, Cancel& cancel, Token&& token)
 {
     Handler<Token, std::string> handler(std::forward<Token>(token));
     Result<Token, std::string> result(handler);
