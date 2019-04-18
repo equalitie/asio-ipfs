@@ -14,6 +14,7 @@ import (
 	"io"
 	"strings"
 	"io/ioutil"
+	"encoding/json"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
@@ -74,6 +75,13 @@ const (
 	enableQuic = true
 )
 
+type Config struct {
+	Online bool
+	LowWater int
+	HighWater int
+	GracePeriod string
+}
+
 func main() {
 }
 
@@ -104,7 +112,7 @@ func setRandomPort(ep string) string {
 	return strings.Join(parts, "/")
 }
 
-func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
+func openOrCreateRepo(repoRoot string, c Config) (repo.Repo, error) {
 	if doesnt_exist_or_is_empty(repoRoot) {
 		conf, err := config.Init(os.Stdout, nBitsForKeypair)
 
@@ -124,8 +132,9 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 			conf.Addresses.Swarm = append(conf.Addresses.Swarm, "/ip4/0.0.0.0/udp/0/quic")
 		}
 
-		conf.Swarm.ConnMgr.LowWater = 400
-		conf.Swarm.ConnMgr.HighWater = 600
+		conf.Swarm.ConnMgr.LowWater = c.LowWater
+		conf.Swarm.ConnMgr.HighWater = c.HighWater
+		conf.Swarm.ConnMgr.GracePeriod = c.GracePeriod
 
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
 			return nil, err
@@ -241,9 +250,17 @@ func loadPlugins(plugins []plugin.Plugin) bool {
 	return true
 }
 
-func start_node(online bool, n *Node, repoRoot string) C.int {
+func start_node(cfg_json string, n *Node, repoRoot string) C.int {
 
-	err := mprome.Inject()
+	var c Config
+	err := json.Unmarshal([]byte(cfg_json), &c)
+
+	if err != nil {
+		fmt.Println("Failed to parse config ", err);
+		return C.IPFS_FAILED_TO_CREATE_REPO
+	}
+
+	err = mprome.Inject()
 
 	if err != nil {
 		fmt.Println("err");
@@ -258,7 +275,7 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 		return C.IPFS_FAILED_TO_CREATE_REPO
 	}
 
-	r, err := openOrCreateRepo(repoRoot);
+	r, err := openOrCreateRepo(repoRoot, c);
 
 	if err != nil {
 		fmt.Println("err", err);
@@ -268,7 +285,7 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 	cfg, err := fsrepo.ConfigAt(repoRoot);
 
 	n.node, err = core.NewNode(n.ctx, &core.BuildCfg{
-		Online: online,
+		Online: c.Online,
 		Permanent: true,
 		Repo:   r,
 		ExtraOpts: map[string]bool{
@@ -304,22 +321,24 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 }
 
 //export go_asio_ipfs_start_blocking
-func go_asio_ipfs_start_blocking(handle uint64, online bool, c_repoPath *C.char) C.int {
+func go_asio_ipfs_start_blocking(handle uint64, c_cfg *C.char, c_repoPath *C.char) C.int {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
+	cfg := C.GoString(c_cfg)
 
-	return start_node(online, n, repoRoot);
+	return start_node(cfg, n, repoRoot);
 }
 
 //export go_asio_ipfs_start_async
-func go_asio_ipfs_start_async(handle uint64, online bool, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_start_async(handle uint64, c_cfg *C.char, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
+	cfg := C.GoString(c_cfg)
 
 	go func() {
-		err := start_node(online, n, repoRoot);
+		err := start_node(cfg, n, repoRoot);
 
 		C.execute_void_cb(fn, err, fn_arg)
 	}()

@@ -59,7 +59,10 @@ int main(int argc, const char** argv)
     cout << "Starting event loop, press Ctrl-C to exit." << endl;
 
     asio::spawn(ios, [&](asio::yield_context yield) {
-            auto n = asio_ipfs::node::build(ios, true, repo, yield);
+            auto n = asio_ipfs::node::build( ios
+                                           , repo
+                                           , asio_ipfs::node::config{}
+                                           , yield);
 
             if (vm.count("add")) {
                 string cid = n->add(vm["add"].as<string>(), yield);
