@@ -14,6 +14,7 @@ import (
 	"io"
 	"strings"
 	"io/ioutil"
+	"encoding/json"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
@@ -241,9 +242,21 @@ func loadPlugins(plugins []plugin.Plugin) bool {
 	return true
 }
 
-func start_node(online bool, n *Node, repoRoot string) C.int {
+type Config struct {
+	Online bool
+}
 
-	err := mprome.Inject()
+func start_node(cfg_json string, n *Node, repoRoot string) C.int {
+
+	var c Config
+	err := json.Unmarshal([]byte(cfg_json), &c)
+
+	if err != nil {
+		fmt.Println("Failed to parse config ", err);
+		return C.IPFS_FAILED_TO_CREATE_REPO
+	}
+
+	err = mprome.Inject()
 
 	if err != nil {
 		fmt.Println("err");
@@ -268,7 +281,7 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 	cfg, err := fsrepo.ConfigAt(repoRoot);
 
 	n.node, err = core.NewNode(n.ctx, &core.BuildCfg{
-		Online: online,
+		Online: c.Online,
 		Permanent: true,
 		Repo:   r,
 		ExtraOpts: map[string]bool{
@@ -304,22 +317,24 @@ func start_node(online bool, n *Node, repoRoot string) C.int {
 }
 
 //export go_asio_ipfs_start_blocking
-func go_asio_ipfs_start_blocking(handle uint64, online bool, c_repoPath *C.char) C.int {
+func go_asio_ipfs_start_blocking(handle uint64, c_cfg *C.char, c_repoPath *C.char) C.int {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
+	cfg := C.GoString(c_cfg)
 
-	return start_node(online, n, repoRoot);
+	return start_node(cfg, n, repoRoot);
 }
 
 //export go_asio_ipfs_start_async
-func go_asio_ipfs_start_async(handle uint64, online bool, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
+func go_asio_ipfs_start_async(handle uint64, c_cfg *C.char, c_repoPath *C.char, fn unsafe.Pointer, fn_arg unsafe.Pointer) {
 	var n = g_nodes[handle]
 
 	repoRoot := C.GoString(c_repoPath)
+	cfg := C.GoString(c_cfg)
 
 	go func() {
-		err := start_node(online, n, repoRoot);
+		err := start_node(cfg, n, repoRoot);
 
 		C.execute_void_cb(fn, err, fn_arg)
 	}()

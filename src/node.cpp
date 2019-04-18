@@ -4,6 +4,7 @@
 #include <experimental/tuple>
 #include <boost/intrusive/list.hpp>
 #include <boost/optional.hpp>
+#include <sstream>
 
 #include <asio_ipfs.h>
 
@@ -168,12 +169,27 @@ void call_ipfs_nocancel(
     );
 }
 
-
-
-node::node(asio::io_service& ios, bool online, const string& repo_path)
+static
+string config_to_json(node::config cfg)
 {
+    stringstream ss;
+
+    // Poor man's json
+    ss << "{"
+       <<     "\"Online\": " << (cfg.online ? "true" : "false")
+       << "}";
+
+    return ss.str();
+}
+
+node::node(asio::io_service& ios, const string& repo_path, config cfg)
+{
+    string cfg_s = config_to_json(cfg);
+
     uint64_t ipfs_handle = go_asio_ipfs_allocate();
-    int ec = go_asio_ipfs_start_blocking(ipfs_handle, online, (char*) repo_path.data());
+    int ec = go_asio_ipfs_start_blocking( ipfs_handle
+                                        , (char*) cfg_s.c_str()
+                                        , (char*) repo_path.data());
 
     if (ec != IPFS_SUCCESS) {
         go_asio_ipfs_free(ipfs_handle);
@@ -185,8 +201,8 @@ node::node(asio::io_service& ios, bool online, const string& repo_path)
 }
 
 void node::build_( asio::io_service& ios
-                 , bool online
                  , const string& repo_path
+                 , config cfg
                  , Cancel* cancel
                  , function<void( const sys::error_code& ec
                                 , unique_ptr<node>)> cb)
@@ -210,7 +226,13 @@ void node::build_( asio::io_service& ios
         }
     };
 
-    call_ipfs_nocancel(impl, cancel, cb_, go_asio_ipfs_start_async, online, (char*) repo_path.data());
+    string cfg_s = config_to_json(cfg);
+
+    call_ipfs_nocancel( impl
+                      , cancel
+                      , cb_
+                      , go_asio_ipfs_start_async, (char*) cfg_s.c_str()
+                                                , (char*) repo_path.data());
 }
 
 node::node() = default;
