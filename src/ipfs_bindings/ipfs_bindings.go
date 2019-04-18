@@ -75,6 +75,13 @@ const (
 	enableQuic = true
 )
 
+type Config struct {
+	Online bool
+	LowWater int
+	HighWater int
+	GracePeriod string
+}
+
 func main() {
 }
 
@@ -105,7 +112,7 @@ func setRandomPort(ep string) string {
 	return strings.Join(parts, "/")
 }
 
-func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
+func openOrCreateRepo(repoRoot string, c Config) (repo.Repo, error) {
 	if doesnt_exist_or_is_empty(repoRoot) {
 		conf, err := config.Init(os.Stdout, nBitsForKeypair)
 
@@ -125,8 +132,9 @@ func openOrCreateRepo(repoRoot string) (repo.Repo, error) {
 			conf.Addresses.Swarm = append(conf.Addresses.Swarm, "/ip4/0.0.0.0/udp/0/quic")
 		}
 
-		conf.Swarm.ConnMgr.LowWater = 400
-		conf.Swarm.ConnMgr.HighWater = 600
+		conf.Swarm.ConnMgr.LowWater = c.LowWater
+		conf.Swarm.ConnMgr.HighWater = c.HighWater
+		conf.Swarm.ConnMgr.GracePeriod = c.GracePeriod
 
 		if err := fsrepo.Init(repoRoot, conf); err != nil {
 			return nil, err
@@ -242,10 +250,6 @@ func loadPlugins(plugins []plugin.Plugin) bool {
 	return true
 }
 
-type Config struct {
-	Online bool
-}
-
 func start_node(cfg_json string, n *Node, repoRoot string) C.int {
 
 	var c Config
@@ -271,7 +275,7 @@ func start_node(cfg_json string, n *Node, repoRoot string) C.int {
 		return C.IPFS_FAILED_TO_CREATE_REPO
 	}
 
-	r, err := openOrCreateRepo(repoRoot);
+	r, err := openOrCreateRepo(repoRoot, c);
 
 	if err != nil {
 		fmt.Println("err", err);

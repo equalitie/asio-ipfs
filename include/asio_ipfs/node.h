@@ -30,7 +30,10 @@ public:
     static const uint32_t CID_SIZE = 46;
 
     struct config {
-        bool online = true;
+        bool         online       = true;
+        unsigned int low_water    = 600;
+        unsigned int high_water   = 900;
+        unsigned int grace_period = 20; // seconds
     };
 
 public:

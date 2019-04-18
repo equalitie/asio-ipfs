@@ -176,7 +176,10 @@ string config_to_json(node::config cfg)
 
     // Poor man's json
     ss << "{"
-       <<     "\"Online\": " << (cfg.online ? "true" : "false")
+       <<     "\"Online\": " << (cfg.online ? "true" : "false") << ","
+       <<     "\"LowWater\": " << cfg.low_water << ","
+       <<     "\"HighWater\": " << cfg.high_water << ","
+       <<     "\"GracePeriod\": \"" << cfg.grace_period << "s\""
        << "}";
 
     return ss.str();
