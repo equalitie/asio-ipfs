@@ -116,6 +116,7 @@ add_custom_command(
          && export CGO_ENABLED=1
          && export CC=${CMAKE_C_COMPILER}
          && export GO111MODULE=on
+         && export GOPROXY='https://proxy.golang.org' # https://github.com/ipfs/go-ipfs/issues/6460#issuecomment-504937222
          && mkdir -p ${GOPATH}/src/github.com/equalitie/asio-ipfs
          && cd ${GOPATH}/src/github.com/equalitie/asio-ipfs
          && rsync -r ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src .
