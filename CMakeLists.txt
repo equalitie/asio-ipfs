@@ -125,6 +125,7 @@ add_custom_command(
                      --buildmode=c-shared
                      -o ${BINDING_DIR}/ipfs_bindings.so
                      ./src/ipfs_bindings
+         && chmod u+w -R ${GOPATH} # Modules cache is ro by default which CI doesn't cope with; https://github.com/golang/go/issues/27161
          && mv ${BINDING_DIR}/ipfs_bindings.so ${BINDING_DIR}/libipfs_bindings.so
 )
 
