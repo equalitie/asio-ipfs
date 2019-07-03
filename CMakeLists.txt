@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 3.5)
 ################################################################################
 
 # NOTE: from_iso_extended_string has been introduced in Boost 1.62
-set(BOOST_VERSION 1.62)
+set(BOOST_VERSION 1.70)
 include(ExternalProject)
 
 ################################################################################
@@ -135,7 +135,6 @@ set_target_properties(ipfs-bindings PROPERTIES IMPORTED_LOCATION ${BINDINGS_LIBR
 
 ################################################################################
 include_directories(
-    "${Boost_INCLUDE_DIR}"
     "${BINDING_DIR}"
     "./include")
 
@@ -145,7 +144,12 @@ file(GLOB sources
 
 add_library(asio-ipfs STATIC ${sources})
 set_target_properties(asio-ipfs PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(asio-ipfs ipfs-bindings ${Boost_LIBRARIES})
+target_link_libraries(asio-ipfs ipfs-bindings
+    Boost::program_options
+    Boost::coroutine
+    Boost::context
+    Boost::thread
+    Boost::system)
 
 ################################################################################
 # Only set these variables if this CMakeLists.txt is included from another one.
@@ -171,7 +175,12 @@ set(sources "./example/ipfs.cpp")
 
 add_executable(ipfs-example ${sources})
 add_dependencies(ipfs-example asio-ipfs)
-target_link_libraries(ipfs-example asio-ipfs ipfs-bindings ${Boost_LIBRARIES})
+target_link_libraries(ipfs-example asio-ipfs ipfs-bindings
+    Boost::program_options
+    Boost::coroutine
+    Boost::context
+    Boost::thread
+    Boost::system)
 
 ################################################################################
 endif() # ASIO_IPFS_WITH_EXAMPLE_BINARIES
