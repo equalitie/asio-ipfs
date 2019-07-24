@@ -5,16 +5,28 @@ cmake_minimum_required (VERSION 3.5)
 set(BOOST_VERSION 1.62)
 include(ExternalProject)
 
+option(ASIO_IPFS_WITH_EXAMPLE_BINARIES "Build with example binaries" ON)
+
 ################################################################################
 project(asio-ipfs)
 
 find_package(Threads)
 find_package(Boost ${BOOST_VERSION} REQUIRED COMPONENTS
-    program_options
     coroutine
-    context
-    thread
-    system)
+    system
+)
+
+if(NOT TARGET golang)
+    set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang")
+    externalproject_add(golang
+        URL https://dl.google.com/go/go1.12.3.linux-amd64.tar.gz
+        URL_MD5 eac797050ce084d444a49e8d68ad13b7
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+        SOURCE_DIR ${GOROOT}
+    )
+endif()
 
 # Convert system name into GOOS.
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
@@ -40,50 +52,6 @@ else()
     message(FATAL_ERROR "unsupported system processor ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-# Build target tag with the Android API version if relevant.
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
-    set(TARGET "${CMAKE_SYSTEM_NAME}${CMAKE_SYSTEM_VERSION}--${CMAKE_SYSTEM_PROCESSOR}")
-else()
-    set(TARGET "${CMAKE_SYSTEM_NAME}--${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-
-################################################################################
-option(ASIO_IPFS_WITH_EXAMPLE_BINARIES "Build with example binaries" ON)
-
-add_definitions(-DBOOST_COROUTINE_NO_DEPRECATION_WARNING
-                -DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
-
-# This is a static library, so don't include asio. Users need to link
-# libboost_asio either statically or as a shared library.
-add_definitions(-DBOOST_ASIO_SEPARATE_COMPILATION)
-
-################################################################################
-# TODO(peterj): Address sanitizer seems to cause segmentation faults on exit
-#               from main(?).
-#set(SANITIZE "-fsanitize=address")
-################################################################################
-
-# Android does not support POSIX file:
-# <https://github.com/boostorg/beast/issues/800>.
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Android")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_BEAST_NO_POSIX_FILE=0")
-endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITIZE}")
-
-################################################################################
-
-if(NOT TARGET golang)
-    set(GOROOT "${CMAKE_CURRENT_BINARY_DIR}/golang")
-    externalproject_add(golang
-        URL https://dl.google.com/go/go1.12.3.linux-amd64.tar.gz
-        URL_MD5 eac797050ce084d444a49e8d68ad13b7
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-        SOURCE_DIR ${GOROOT}
-    )
-endif()
-
 ################################################################################
 
 set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go-workspace")
@@ -100,9 +68,9 @@ set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go-workspace")
 #    INSTALL_COMMAND ""
 #)
 
-set(BINDING_DIR "${CMAKE_CURRENT_BINARY_DIR}/ipfs_bindings")
-set(BINDINGS_HEADER  "${BINDING_DIR}/ipfs_bindings.h")
-set(BINDINGS_LIBRARY "${BINDING_DIR}/libipfs_bindings.so")
+set(BINDINGS_DIR "${CMAKE_CURRENT_BINARY_DIR}/ipfs_bindings")
+set(BINDINGS_HEADER  "${BINDINGS_DIR}/ipfs_bindings.h")
+set(BINDINGS_LIBRARY "${BINDINGS_DIR}/libipfs_bindings.so")
 set(BINDINGS_OUTPUT ${BINDINGS_HEADER} ${BINDINGS_LIBRARY})
 
 add_custom_command(
@@ -110,7 +78,7 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/asio_ipfs/ipfs_error_codes.h
             ${CMAKE_CURRENT_SOURCE_DIR}/src/ipfs_bindings/ipfs_bindings.go
             golang
-    COMMAND mkdir -p ${BINDING_DIR}
+    COMMAND mkdir -p ${BINDINGS_DIR}
          && export PATH=${GOROOT}/bin:$ENV{PATH}
          && export GOROOT=${GOROOT}
          && export GOPATH=${GOPATH}
@@ -127,62 +95,69 @@ add_custom_command(
          && cp ${CMAKE_CURRENT_SOURCE_DIR}/go.mod ./
          && go build -ldflags '-extldflags -Wl,-soname,libipfs_bindings.so'
                      --buildmode=c-shared
-                     -o ${BINDING_DIR}/ipfs_bindings.so
+                     -o ${BINDINGS_DIR}/ipfs_bindings.so
                      ./src/ipfs_bindings
          && chmod u+w -R ${GOPATH} # Modules cache is ro by default which CI doesn't cope with; https://github.com/golang/go/issues/27161
-         && mv ${BINDING_DIR}/ipfs_bindings.so ${BINDING_DIR}/libipfs_bindings.so
+         && mv ${BINDINGS_DIR}/ipfs_bindings.so ${BINDINGS_DIR}/libipfs_bindings.so
 )
+add_custom_target(ipfs-bindings DEPENDS ${BINDINGS_OUTPUT})
 
-add_custom_target(ipfs-bindings-target DEPENDS ${BINDINGS_OUTPUT})
-add_library(ipfs-bindings SHARED IMPORTED GLOBAL)
-add_dependencies(ipfs-bindings ipfs-bindings-target)
-set_target_properties(ipfs-bindings PROPERTIES IMPORTED_LOCATION ${BINDINGS_LIBRARY})
+
 
 ################################################################################
-include_directories(
-    "${Boost_INCLUDE_DIR}"
-    "${BINDING_DIR}"
-    "./include")
-
-file(GLOB sources
-  "./src/*.h"
-  "./src/*.cpp")
-
+file(GLOB sources "./src/*.cpp")
 add_library(asio-ipfs STATIC ${sources})
 set_target_properties(asio-ipfs PROPERTIES LINKER_LANGUAGE CXX)
-target_link_libraries(asio-ipfs ipfs-bindings ${Boost_LIBRARIES})
+add_dependencies(asio-ipfs ipfs-bindings)
+target_include_directories(asio-ipfs
+    PRIVATE ${BINDINGS_DIR}
+    PUBLIC "include"
+)
+target_compile_definitions(asio-ipfs
+    PUBLIC
+        # This is a static library, so don't include asio. Users need to link
+        # libboost_asio either statically or as a shared library.
+        -DBOOST_ASIO_SEPARATE_COMPILATION
+        # For some reason we need to define both of these
+        -DBOOST_COROUTINES_NO_DEPRECATION_WARNING
+        -DBOOST_COROUTINE_NO_DEPRECATION_WARNING
+)
+target_compile_options(asio-ipfs
+    PUBLIC -std=c++14
+)
+target_link_libraries(asio-ipfs
+    PRIVATE ${BINDINGS_LIBRARY}
+    PUBLIC Boost::boost
+    INTERFACE ${Boost_LIBRARIES}
+)
 
-################################################################################
-# Only set these variables if this CMakeLists.txt is included from another one.
-get_directory_property(hasParent PARENT_DIRECTORY)
-if(hasParent)
-    set(ASIO_IPFS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include" PARENT_SCOPE)
-    set(ASIO_IPFS_TARGET "asio-ipfs" PARENT_SCOPE)
-    set(ASIO_IPFS_LIBRARIES
-        asio-ipfs
-        ipfs-bindings
-        PARENT_SCOPE)
-endif()
 
 ################################################################################
 if(ASIO_IPFS_WITH_EXAMPLE_BINARIES)
 ################################################################################
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITIZE}")
+    find_package(Boost ${BOOST_VERSION} REQUIRED COMPONENTS
+        program_options
+    )
 
-# The static library asio-ipfs requires a separately compiled asio,
-# so supply one for the tests and examples.
-add_library(asio-ipfs_static_asio STATIC "lib/asio.cpp")
-target_link_libraries(asio-ipfs_static_asio ${Boost_LIBRARIES})
 
-include_directories(
-    "./include")
+    # The static library asio-ipfs requires a separately compiled asio,
+    # so supply one for the tests and examples.
+    add_library(asio-ipfs_static_asio STATIC "lib/asio.cpp")
+    target_link_libraries(asio-ipfs_static_asio
+        PUBLIC
+            Boost::boost
+        INTERFACE
+            ${Boost_LIBRARIES}
+            Threads::Threads
+    )
+    target_compile_definitions(asio-ipfs_static_asio
+        PUBLIC -DBOOST_ASIO_SEPARATE_COMPILATION
+    )
 
-set(sources "./example/ipfs.cpp")
 
-add_executable(ipfs-example ${sources})
-add_dependencies(ipfs-example asio-ipfs)
-target_link_libraries(ipfs-example asio-ipfs ipfs-bindings ${Boost_LIBRARIES} asio-ipfs_static_asio)
-
-################################################################################
+    add_executable(ipfs-example "example/ipfs.cpp")
+    target_link_libraries(ipfs-example
+        asio-ipfs
+        asio-ipfs_static_asio
+    )
 endif() # ASIO_IPFS_WITH_EXAMPLE_BINARIES
-################################################################################
