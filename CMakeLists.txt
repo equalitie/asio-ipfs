@@ -53,6 +53,10 @@ option(ASIO_IPFS_WITH_EXAMPLE_BINARIES "Build with example binaries" ON)
 add_definitions(-DBOOST_COROUTINE_NO_DEPRECATION_WARNING
                 -DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 
+# This is a static library, so don't include asio. Users need to link
+# libboost_asio either statically or as a shared library.
+add_definitions(-DBOOST_ASIO_SEPARATE_COMPILATION)
+
 ################################################################################
 # TODO(peterj): Address sanitizer seems to cause segmentation faults on exit
 #               from main(?).
@@ -165,6 +169,11 @@ if(ASIO_IPFS_WITH_EXAMPLE_BINARIES)
 ################################################################################
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -Wall -ggdb ${SANITIZE}")
 
+# The static library asio-ipfs requires a separately compiled asio,
+# so supply one for the tests and examples.
+add_library(asio-ipfs_static_asio STATIC "lib/asio.cpp")
+target_link_libraries(asio-ipfs_static_asio ${Boost_LIBRARIES})
+
 include_directories(
     "./include")
 
@@ -172,7 +181,7 @@ set(sources "./example/ipfs.cpp")
 
 add_executable(ipfs-example ${sources})
 add_dependencies(ipfs-example asio-ipfs)
-target_link_libraries(ipfs-example asio-ipfs ipfs-bindings ${Boost_LIBRARIES})
+target_link_libraries(ipfs-example asio-ipfs ipfs-bindings ${Boost_LIBRARIES} asio-ipfs_static_asio)
 
 ################################################################################
 endif() # ASIO_IPFS_WITH_EXAMPLE_BINARIES
